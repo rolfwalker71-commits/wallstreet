@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  font-size: calc(100% * var(--app-font-scale, 1));
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: rgb(var(--background));
+  color: rgb(var(--foreground));
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--ring));
+  outline-offset: 2px;
+}
+
+button,
+a,
+[role="tab"] {
+  touch-action: manipulation;
+}
+
+/* --- Material You 3 Expressive (Android) --- */
+html[data-chrome="android"] {
+  --font-sans: "Roboto Flex", Roboto, system-ui, sans-serif;
+  --radius: 1.75rem;
+  --primary: 103 80 164;
+  --on-primary: 255 255 255;
+  --secondary: 232 222 248;
+  --background: 247 242 250;
+  --foreground: 29 27 32;
+  --card: 243 237 247;
+  --card-foreground: 29 27 32;
+  --muted: 232 222 248;
+  --muted-foreground: 73 69 79;
+  --border: 202 196 208;
+  --ring: 103 80 164;
+  --destructive: 186 26 26;
+  --gain: 0 110 60;
+  --on-gain: 255 255 255;
+  --gain-container: 196 236 210;
+  --loss: 186 26 26;
+  --on-loss: 255 255 255;
+  --loss-container: 255 218 214;
+}
+
+html[data-chrome="android"][data-theme="dark"] {
+  --primary: 208 188 255;
+  --on-primary: 56 30 114;
+  --secondary: 79 55 139;
+  --background: 20 18 24;
+  --foreground: 230 224 233;
+  --card: 33 31 38;
+  --card-foreground: 230 224 233;
+  --muted: 50 46 58;
+  --muted-foreground: 202 196 208;
+  --border: 73 69 79;
+  --ring: 208 188 255;
+  --destructive: 242 184 181;
+  --gain: 110 220 150;
+  --on-gain: 0 42 22;
+  --gain-container: 18 64 40;
+  --loss: 255 180 176;
+  --on-loss: 64 8 8;
+  --loss-container: 72 24 28;
+}
+
+/* --- Windows Fluent 2 (desktop) --- */
+html[data-chrome="desktop"] {
+  --font-sans: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --radius: 0.375rem;
+  --primary: 0 95 184;
+  --on-primary: 255 255 255;
+  --secondary: 243 243 243;
+  --background: 243 243 243;
+  --foreground: 28 28 28;
+  --card: 255 255 255;
+  --card-foreground: 28 28 28;
+  --muted: 243 243 243;
+  --muted-foreground: 93 93 93;
+  --border: 229 229 229;
+  --ring: 0 95 184;
+  --destructive: 196 43 28;
+  --gain: 16 124 16;
+  --on-gain: 255 255 255;
+  --gain-container: 210 242 210;
+  --loss: 196 43 28;
+  --on-loss: 255 255 255;
+  --loss-container: 255 220 216;
+}
+
+html[data-chrome="desktop"][data-theme="dark"] {
+  --primary: 96 205 255;
+  --on-primary: 0 24 48;
+  --secondary: 44 44 44;
+  --background: 32 32 32;
+  --foreground: 255 255 255;
+  --card: 44 44 44;
+  --card-foreground: 255 255 255;
+  --muted: 44 44 44;
+  --muted-foreground: 200 200 200;
+  --border: 62 62 62;
+  --ring: 96 205 255;
+  --destructive: 255 153 164;
+  --gain: 108 203 115;
+  --on-gain: 0 36 8;
+  --gain-container: 20 58 28;
+  --loss: 255 153 164;
+  --on-loss: 64 8 16;
+  --loss-container: 72 28 32;
+}
+
+html[data-chrome="desktop"] .mica {
+  backdrop-filter: blur(1.25rem) saturate(1.4);
+  background: color-mix(in srgb, rgb(var(--card)) 80%, transparent);
+}

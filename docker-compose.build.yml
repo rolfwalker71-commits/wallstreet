@@ -1,0 +1,15 @@
+# Overlay nur zum lokalen Image-Build.
+# docker compose -f docker-compose.yml -f docker-compose.build.yml build
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
