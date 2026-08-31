@@ -78,15 +78,18 @@ async def unsubscribe(payload: SubscribeIn, db: AsyncSession = Depends(get_db)) 
 
 @router.post("/test")
 async def test_push(db: AsyncSession = Depends(get_db)) -> dict:
-    sent = await broadcast(
-        db,
-        {
-            "title": "Wallstreet bereit",
-            "body": "Benachrichtigungen sind aktiv. Kauf- und Verkaufssignale kommen automatisch.",
-            "url": "/",
-            "tag": "push-test",
-        },
-    )
+    try:
+        sent = await broadcast(
+            db,
+            {
+                "title": "Wallstreet bereit",
+                "body": "Benachrichtigungen sind aktiv. Kauf- und Verkaufssignale kommen automatisch.",
+                "url": "/",
+                "tag": "push-test",
+            },
+        )
+    except PushError as exc:
+        raise HTTPException(502, str(exc)) from exc
     await db.commit()
     if sent == 0:
         raise HTTPException(400, "Kein Gerät abonniert. Zuerst aktivieren.")

@@ -6,6 +6,7 @@ declare let self: ServiceWorkerGlobalScope;
 
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
+void self.skipWaiting();
 clientsClaim();
 
 self.addEventListener("push", (event) => {
@@ -20,8 +21,6 @@ self.addEventListener("push", (event) => {
       body: data.body || "Neues Signal",
       data: { url: data.url || "/" },
       tag: data.tag || "wallstreet",
-      icon: "/favicon.svg",
-      badge: "/favicon.svg",
     }),
   );
 });

@@ -73,3 +73,15 @@ async def ensure_vapid(session: AsyncSession, subject: str | None = None) -> dic
 async def get_vapid_public(session: AsyncSession) -> str:
     keys = await ensure_vapid(session)
     return keys["public_key"]
+
+
+def load_vapid_private(private: str):
+    """PEM from our DB cannot go through Vapid.from_string (that expects raw/DER)."""
+    from cryptography.hazmat.primitives.serialization import load_pem_private_key
+    from py_vapid import Vapid
+
+    text = private.strip()
+    if "BEGIN" in text:
+        key = load_pem_private_key(text.encode(), password=None)
+        return Vapid(private_key=key)
+    return Vapid.from_string(text)

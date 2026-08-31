@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Recommendation
 from app.models.enums import RecommendationAction
 from app.models.settings import PushSubscription
-from app.services.vapid import ensure_vapid
+from app.services.vapid import ensure_vapid, load_vapid_private
 
 logger = logging.getLogger(__name__)
 
@@ -117,30 +117,39 @@ def _send_one(sub: PushSubscription, keys: dict[str, str], payload: dict) -> boo
                 "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
             },
             data=json.dumps(payload, ensure_ascii=False),
-            vapid_private_key=keys["private_key"],
+            vapid_private_key=load_vapid_private(keys["private_key"]),
             vapid_claims={"sub": keys["subject"]},
+            ttl=86_400,
         )
         return True
     except WebPushException as exc:
         status = getattr(getattr(exc, "response", None), "status_code", None)
         if status in {404, 410}:
             return False
-        logger.warning("Push fehlgeschlagen: %s", exc)
-        return True
-    except Exception:
-        logger.exception("Push unerwartet fehlgeschlagen")
-        return True
+        raise PushError(str(exc)) from exc
+    except Exception as exc:
+        raise PushError(str(exc)) from exc
 
 
 async def broadcast(session: AsyncSession, payload: dict) -> int:
     import asyncio
 
     keys = await ensure_vapid(session)
+    try:
+        load_vapid_private(keys["private_key"])
+    except Exception as exc:
+        raise PushError(f"VAPID-Schlüssel ungültig: {exc}") from exc
     subs = await list_subscriptions(session)
     sent = 0
     stale: list[PushSubscription] = []
+    errors: list[str] = []
     for sub in subs:
-        ok = await asyncio.to_thread(_send_one, sub, keys, payload)
+        try:
+            ok = await asyncio.to_thread(_send_one, sub, keys, payload)
+        except PushError as exc:
+            errors.append(str(exc))
+            logger.warning("Push fehlgeschlagen: %s", exc)
+            continue
         if ok:
             sent += 1
         else:
@@ -149,6 +158,8 @@ async def broadcast(session: AsyncSession, payload: dict) -> int:
         await session.delete(sub)
     if stale:
         await session.flush()
+    if sent == 0 and errors:
+        raise PushError(errors[0])
     return sent
 
 

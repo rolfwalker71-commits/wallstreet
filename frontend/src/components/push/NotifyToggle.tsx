@@ -9,6 +9,7 @@ export function NotifyToggle({ chrome }: { chrome: Chrome }) {
   const [devices, setDevices] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   const refresh = async () => {
     const [local, status] = await Promise.all([
@@ -31,6 +32,7 @@ export function NotifyToggle({ chrome }: { chrome: Chrome }) {
   const toggle = async () => {
     setBusy(true);
     setError(null);
+    setNote(null);
     try {
       if (on) await deactivatePush();
       else await activatePush();
@@ -45,8 +47,14 @@ export function NotifyToggle({ chrome }: { chrome: Chrome }) {
   const test = async () => {
     setBusy(true);
     setError(null);
+    setNote(null);
     try {
-      await api.pushTest();
+      const res = await api.pushTest();
+      setNote(
+        res.sent === 1
+          ? "Test gesendet. Die Meldung sollte gleich erscheinen."
+          : `Test an ${res.sent} Geräte gesendet.`,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Test fehlgeschlagen");
     } finally {
@@ -89,6 +97,7 @@ export function NotifyToggle({ chrome }: { chrome: Chrome }) {
           Test senden
         </button>
       </div>
+      {note ? <p className="text-sm font-medium text-gain">{note}</p> : null}
       {error ? (
         <p className="text-sm text-loss" role="alert">
           {error}

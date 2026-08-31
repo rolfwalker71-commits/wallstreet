@@ -1,6 +1,9 @@
+import pytest
+from py_vapid import Vapid
+
 from app.models.enums import RecommendationAction
 from app.services.push import should_notify
-from app.services.vapid import generate_vapid_keys
+from app.services.vapid import generate_vapid_keys, load_vapid_private
 
 
 class _Rec:
@@ -13,6 +16,15 @@ def test_vapid_keys_are_webpush_shaped() -> None:
     assert "BEGIN PRIVATE KEY" in private_pem
     assert public_b64.startswith("B")
     assert "=" not in public_b64
+
+
+def test_pem_private_key_loads_for_webpush() -> None:
+    private_pem, _public = generate_vapid_keys()
+    with pytest.raises(Exception):
+        Vapid.from_string(private_pem)
+    vapid = load_vapid_private(private_pem)
+    headers = vapid.sign({"sub": "mailto:wallstreet@localhost", "aud": "https://fcm.googleapis.com"})
+    assert "Authorization" in headers
 
 
 def test_notify_only_new_buy_sell() -> None:
