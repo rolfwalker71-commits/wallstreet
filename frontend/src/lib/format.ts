@@ -6,6 +6,11 @@ const dateFmt = new Intl.DateTimeFormat(LOCALE, {
   year: "numeric",
 });
 
+const dateShortFmt = new Intl.DateTimeFormat(LOCALE, {
+  day: "2-digit",
+  month: "2-digit",
+});
+
 const timeFmt = new Intl.DateTimeFormat(LOCALE, {
   hour: "2-digit",
   minute: "2-digit",
@@ -17,6 +22,13 @@ export function date(iso: string | Date | null | undefined) {
   const d = iso instanceof Date ? iso : new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
   return dateFmt.format(d);
+}
+
+export function dateShort(iso: string | Date | null | undefined) {
+  if (!iso) return "—";
+  const d = iso instanceof Date ? iso : new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return dateShortFmt.format(d);
 }
 
 export function time(iso: string | Date | null | undefined) {

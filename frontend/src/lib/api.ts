@@ -16,6 +16,19 @@ export interface Asset {
   notes: string | null;
 }
 
+export interface TitleSearchHit {
+  symbol: string;
+  name: string;
+  exchange: string | null;
+  exchange_label: string | null;
+  quote_type: string | null;
+  asset_class: AssetClass;
+  swiss_buyable: boolean;
+  watched: boolean;
+  in_library: boolean;
+  score: number;
+}
+
 export interface SleeveGap {
   sleeve: string;
   label: string;
@@ -239,6 +252,8 @@ export const api = {
     request<Asset>(`/api/assets/${encodeURIComponent(symbol)}`),
   dossier: (symbol: string) =>
     request<Dossier>(`/api/assets/${encodeURIComponent(symbol)}/dossier`),
+  searchTitles: (q: string) =>
+    request<TitleSearchHit[]>(`/api/assets/search?q=${encodeURIComponent(q)}`),
   addAsset: (symbol: string, watched = true) =>
     request<Asset>("/api/assets", {
       method: "POST",

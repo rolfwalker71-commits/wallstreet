@@ -37,6 +37,19 @@ class AssetWatchIn(BaseModel):
     watched: bool
 
 
+class TitleSearchHit(BaseModel):
+    symbol: str
+    name: str
+    exchange: str | None = None
+    exchange_label: str | None = None
+    quote_type: str | None = None
+    asset_class: AssetClass
+    swiss_buyable: bool
+    watched: bool = False
+    in_library: bool = False
+    score: int = 0
+
+
 class AssetOut(ORMModel):
     id: UUID
     symbol: str

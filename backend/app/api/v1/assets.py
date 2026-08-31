@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models import Asset
 from app.models.enums import AssetClass
-from app.schemas.common import AssetCreateIn, AssetOut, AssetWatchIn, Paginated
+from app.schemas.common import AssetCreateIn, AssetOut, AssetWatchIn, Paginated, TitleSearchHit
 from app.services.assets import AssetError, get_or_create_asset, set_watched
 from app.services.core_products import core_of
 from app.services.dossier import build_dossier, fetch_yahoo_facts, persist_isin
+from app.services.title_search import search_titles
 
 router = APIRouter()
 
@@ -26,6 +27,14 @@ async def list_assets(
         stmt = stmt.where(Asset.watched.is_(watched))
     rows = (await db.execute(stmt)).scalars().all()
     return Paginated(items=[AssetOut.model_validate(r) for r in rows], total=len(rows))
+
+
+@router.get("/search", response_model=list[TitleSearchHit])
+async def search_assets(
+    q: str = Query(min_length=2, max_length=80),
+    db: AsyncSession = Depends(get_db),
+) -> list[TitleSearchHit]:
+    return await search_titles(db, q)
 
 
 @router.post("", response_model=AssetOut)

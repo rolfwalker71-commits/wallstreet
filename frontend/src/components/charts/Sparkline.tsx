@@ -38,7 +38,7 @@ export function Sparkline({
             tickMargin={4}
           />
           <Area
-            type="monotone"
+            type="linear"
             dataKey="close"
             stroke={color}
             fill={color}

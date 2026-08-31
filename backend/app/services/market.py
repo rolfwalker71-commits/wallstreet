@@ -97,27 +97,40 @@ async def get_quote(symbol: str, session: AsyncSession | None = None) -> QuoteOu
         return None
 
 
+ALLOWED_PERIODS = {"1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y"}
+
+PERIOD_INTERVAL = {
+    "1d": "5m",
+    "5d": "30m",
+    "1mo": "1d",
+    "3mo": "1d",
+    "6mo": "1d",
+    "1y": "1d",
+    "2y": "1d",
+    "5y": "1d",
+}
+
+
+def resolve_history_period(period: str) -> str:
+    return period if period in ALLOWED_PERIODS else "6mo"
+
+
 def fetch_history(symbol: str, period: str = "6mo") -> pd.DataFrame:
+    chosen = resolve_history_period(period)
+    interval = PERIOD_INTERVAL[chosen]
     try:
-        hist = yf.Ticker(symbol).history(period=period, auto_adjust=True)
+        hist = yf.Ticker(symbol).history(period=chosen, interval=interval, auto_adjust=True)
     except Exception:
-        return pd.DataFrame()
+        hist = None
+    if hist is None or hist.empty:
+        if interval != "1d":
+            try:
+                hist = yf.Ticker(symbol).history(period=chosen, interval="1d", auto_adjust=True)
+            except Exception:
+                return pd.DataFrame()
+        else:
+            return pd.DataFrame()
     return hist if hist is not None else pd.DataFrame()
-
-
-ALLOWED_PERIODS = {"1mo", "3mo", "6mo", "1y", "2y", "5y"}
-
-
-def _period_for_since(since: datetime | None, period: str) -> str:
-    if since is None:
-        return period if period in ALLOWED_PERIODS else "6mo"
-    aware = since if since.tzinfo else since.replace(tzinfo=UTC)
-    age_days = (datetime.now(UTC) - aware).days
-    if age_days <= 30:
-        return "1mo"
-    if age_days <= 180:
-        return "6mo"
-    return "2y"
 
 
 def get_history_series(
@@ -125,13 +138,18 @@ def get_history_series(
     period: str = "6mo",
     since: datetime | None = None,
 ) -> HistoryOut:
-    chosen = _period_for_since(since, period)
+    chosen = resolve_history_period(period)
     hist = fetch_history(symbol, period=chosen)
     if hist.empty:
         return HistoryOut(symbol=symbol.upper(), period=chosen, points=[])
     closes = hist["Close"].dropna()
-    sma20 = closes.rolling(20, min_periods=20).mean()
-    sma50 = closes.rolling(50, min_periods=50).mean()
+    daily = PERIOD_INTERVAL[chosen] == "1d"
+    if daily:
+        sma20 = closes.rolling(20, min_periods=20).mean()
+        sma50 = closes.rolling(50, min_periods=50).mean()
+    else:
+        sma20 = pd.Series(index=closes.index, dtype=float)
+        sma50 = pd.Series(index=closes.index, dtype=float)
     before: list[HistoryPoint] = []
     after: list[HistoryPoint] = []
     since_cmp = None

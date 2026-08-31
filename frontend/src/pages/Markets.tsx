@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { WatchlistButton } from "@/components/ui/WatchlistButton";
+import { WatchlistSearch } from "@/components/watchlist/WatchlistSearch";
 import { api, type Asset, type Quote } from "@/lib/api";
 import { SignedPct } from "@/components/ui/Signed";
 import { CLASS_LABEL, money, signedClass } from "@/lib/format";
-import { fieldClass, listTileClass, type Chrome } from "@/lib/platform";
+import { listTileClass, type Chrome } from "@/lib/platform";
 
 function QuoteChange({ value }: { value: number | null | undefined }) {
   const n = value ?? null;
@@ -28,8 +29,6 @@ export function MarketsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [error, setError] = useState<string | null>(null);
-  const [symbol, setSymbol] = useState("");
-  const [busy, setBusy] = useState(false);
   const [scope, setScope] = useState<"watch" | "discover" | "all">("watch");
 
   const loadQuotes = async (items: Asset[]) => {
@@ -59,24 +58,12 @@ export function MarketsPage() {
     load().catch((e: Error) => setError(e.message));
   }, []);
 
-  const add = async () => {
-    const raw = symbol.trim().toUpperCase();
-    if (!raw) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const asset = await api.addAsset(raw, true);
-      setSymbol("");
-      setAssets((prev) => {
-        const rest = prev.filter((a) => a.symbol !== asset.symbol);
-        return [asset, ...rest];
-      });
-      await loadQuotes([asset]);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Titel nicht gefunden");
-    } finally {
-      setBusy(false);
-    }
+  const onAdded = async (asset: Asset) => {
+    setAssets((prev) => {
+      const rest = prev.filter((a) => a.symbol !== asset.symbol);
+      return [asset, ...rest];
+    });
+    await loadQuotes([asset]);
   };
 
   const visible = assets.filter((a) => {
@@ -96,8 +83,8 @@ export function MarketsPage() {
         <div className="mb-1.5 h-1.5 w-14 rounded-full bg-gain" />
         <h2 className="text-2xl font-semibold leading-snug tracking-tight">Watchlist</h2>
         <p className="text-sm text-muted-foreground">
-          Tippe einen Titel für Bewertung, News und Chart. {watchedCount} auf der Watchlist —
-          entdeckte Empfehlungen kannst du hier übernehmen.
+          Suche nach Firmennamen oder Ticker, dann einzelne Listings merken. {watchedCount} auf der
+          Watchlist — entdeckte Empfehlungen kannst du hier übernehmen.
         </p>
       </div>
 
@@ -107,33 +94,7 @@ export function MarketsPage() {
         </p>
       ) : null}
 
-      <form
-        className={`${listTileClass(chrome)} flex flex-wrap items-end gap-3 px-4 py-4`}
-        onSubmit={(e) => {
-          e.preventDefault();
-          add();
-        }}
-      >
-        <label className="min-w-[10rem] flex-1">
-          <span className="mb-1 block text-sm text-muted-foreground">Titel zur Watchlist</span>
-          <input
-            value={symbol}
-            onChange={(e) => setSymbol(e.target.value)}
-            placeholder="z. B. TSLA"
-            className={fieldClass(chrome)}
-            autoCapitalize="characters"
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={busy || !symbol.trim()}
-          className={`${
-            chrome === "desktop" ? "min-h-11 rounded-md px-4" : "min-h-12 rounded-full px-5"
-          } bg-gain font-medium text-on-gain disabled:opacity-60`}
-        >
-          {busy ? "Sucht…" : "Hinzufügen"}
-        </button>
-      </form>
+      <WatchlistSearch chrome={chrome} onAdded={onAdded} />
 
       <div
         className="flex h-10 min-h-10 gap-0.5 overflow-x-auto rounded-full bg-muted p-0.5"
@@ -166,7 +127,7 @@ export function MarketsPage() {
         <p className={`${listTileClass(chrome)} px-5 py-8 text-muted-foreground`}>
           {scope === "discover"
             ? "Noch keine entdeckten Titel. Starte die Agenten — sie scannen News ausserhalb der Watchlist."
-            : "Watchlist ist leer. Füge oben ein Symbol hinzu."}
+            : "Watchlist ist leer. Suche oben nach einem Namen und nimm einzelne Titel."}
         </p>
       ) : null}
 
