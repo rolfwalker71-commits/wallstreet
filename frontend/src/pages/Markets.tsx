@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
+import { QuoteStamp } from "@/components/market/QuoteStamp";
 import { WatchlistButton } from "@/components/ui/WatchlistButton";
 import { WatchlistSearch } from "@/components/watchlist/WatchlistSearch";
 import { api, type Asset, type Quote } from "@/lib/api";
@@ -164,6 +165,13 @@ export function MarketsPage() {
                   <td className="px-3 py-2">{CLASS_LABEL[a.asset_class] ?? a.asset_class}</td>
                   <td className={`px-3 py-2 ${signedClass(quotes[a.symbol]?.change_pct)}`}>
                     {money(quotes[a.symbol]?.price ?? a.last_price, a.currency)}
+                    <QuoteStamp
+                      asOf={quotes[a.symbol]?.as_of ?? a.last_price_at}
+                      delayed={quotes[a.symbol]?.delayed}
+                      sessionLabel={quotes[a.symbol]?.session_label}
+                      marketOpen={quotes[a.symbol]?.market_open}
+                      venueLabel={quotes[a.symbol]?.venue_label}
+                    />
                   </td>
                   <td className="px-3 py-2">
                     <QuoteChange value={quotes[a.symbol]?.change_pct} />
@@ -220,6 +228,13 @@ export function MarketsPage() {
                 <p className={`mt-2 text-xl font-medium ${signedClass(change)}`}>
                   {money(quotes[a.symbol]?.price ?? a.last_price, a.currency)}
                 </p>
+                <QuoteStamp
+                  asOf={quotes[a.symbol]?.as_of ?? a.last_price_at}
+                  delayed={quotes[a.symbol]?.delayed}
+                  sessionLabel={quotes[a.symbol]?.session_label}
+                  marketOpen={quotes[a.symbol]?.market_open}
+                  venueLabel={quotes[a.symbol]?.venue_label}
+                />
                 <div className="mt-1">
                   <QuoteChange value={change} />
                 </div>

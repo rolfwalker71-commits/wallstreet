@@ -131,6 +131,10 @@ export interface Position {
   market_value: string | null;
   unrealized_pnl: string | null;
   unrealized_pnl_pct: number | null;
+  quote_as_of: string | null;
+  delayed: boolean | null;
+  market_open: boolean | null;
+  session_label: string | null;
 }
 
 export interface Portfolio {
@@ -190,6 +194,11 @@ export interface Quote {
   change_pct: number | null;
   currency: string;
   as_of: string;
+  delayed?: boolean;
+  source?: string | null;
+  venue_label?: string | null;
+  market_open?: boolean | null;
+  session_label?: string | null;
 }
 
 export interface HistoryPoint {

@@ -5,6 +5,7 @@ import { ActionChip } from "@/components/ui/ActionChip";
 import { SignedPct } from "@/components/ui/Signed";
 import { WatchlistButton } from "@/components/ui/WatchlistButton";
 import { api, type Asset, type Dossier, type Quote, type Recommendation, type Technicals } from "@/lib/api";
+import { QuoteStamp } from "@/components/market/QuoteStamp";
 import { CLASS_LABEL, money, number, pct, recAccentClass, signedClass, when } from "@/lib/format";
 import { panelClass, type Chrome } from "@/lib/platform";
 
@@ -115,9 +116,13 @@ export function WatchlistDetailPage() {
               <SignedPct value={change} /> 24h
             </span>
           ) : null}
-          <span className="text-sm text-muted-foreground">
-            {quote?.as_of ? `Stand ${when(quote.as_of)}` : ""}
-          </span>
+          <QuoteStamp
+            asOf={quote?.as_of ?? asset.last_price_at}
+            delayed={quote?.delayed}
+            sessionLabel={quote?.session_label}
+            marketOpen={quote?.market_open}
+            venueLabel={quote?.venue_label}
+          />
         </div>
         {asset.notes ? (
           <p className="mt-3 rounded-2xl bg-gain-container px-3 py-2 text-sm text-gain">

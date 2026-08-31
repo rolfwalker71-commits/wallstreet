@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import { PositionSinceChart } from "@/components/charts/PositionSinceChart";
+import { QuoteStamp } from "@/components/market/QuoteStamp";
 import { AllocationPanel } from "@/components/portfolio/AllocationPanel";
 import { api, type Asset, type Portfolio, type Transaction } from "@/lib/api";
 import { SignedMoney, SignedPct } from "@/components/ui/Signed";
@@ -321,6 +322,12 @@ export function WalletPage() {
                   <SignedMoney value={p.unrealized_pnl} currency={p.asset.currency} />{" "}
                   (<SignedPct value={p.unrealized_pnl_pct} />)
                 </p>
+                <QuoteStamp
+                  asOf={p.quote_as_of ?? p.asset.last_price_at}
+                  delayed={p.delayed}
+                  sessionLabel={p.session_label}
+                  marketOpen={p.market_open}
+                />
                 <PositionSinceChart
                   symbol={p.asset.symbol}
                   currency={p.asset.currency}

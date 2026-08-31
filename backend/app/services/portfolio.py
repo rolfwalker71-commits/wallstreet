@@ -198,6 +198,10 @@ async def decorate_portfolio(session: AsyncSession, portfolio: Portfolio) -> dic
                 "market_value": mv,
                 "unrealized_pnl": pnl,
                 "unrealized_pnl_pct": pnl_pct,
+                "quote_as_of": quote.as_of if quote else pos.asset.last_price_at,
+                "delayed": quote.delayed if quote else None,
+                "market_open": quote.market_open if quote else None,
+                "session_label": quote.session_label if quote else None,
             }
         )
 

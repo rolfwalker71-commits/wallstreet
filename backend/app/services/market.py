@@ -13,6 +13,7 @@ from app.models import Asset, AssetClass
 from app.schemas.market import HistoryOut, HistoryPoint, QuoteOut, TechnicalsOut
 from app.services.classify import COINGECKO_IDS, infer_asset_class
 from app.services.indicators import compute_technicals
+from app.services.session import bar_as_of, session_info
 
 CRYPTO_VS = "usd"
 
@@ -43,6 +44,8 @@ async def fetch_coingecko_quote(coingecko_id: str, symbol: str) -> QuoteOut | No
         change_pct=data.get(f"{CRYPTO_VS}_24h_change"),
         currency="USD",
         as_of=datetime.now(UTC),
+        delayed=False,
+        source="CoinGecko",
     )
 
 
@@ -69,8 +72,10 @@ def fetch_yfinance_quote(symbol: str) -> QuoteOut | None:
         price=Decimal(str(round(price, 6))),
         change_pct=change,
         currency="USD",
-        as_of=datetime.now(UTC),
+        as_of=bar_as_of(close.index[-1]),
         volume=volume,
+        delayed=True,
+        source="Yahoo Finance",
     )
 
 
@@ -81,20 +86,30 @@ async def get_quote(symbol: str, session: AsyncSession | None = None) -> QuoteOu
             await session.execute(select(Asset).where(Asset.symbol == symbol.upper()))
         ).scalar_one_or_none()
 
+    quote: QuoteOut | None = None
     if asset and asset.asset_class == AssetClass.CRYPTO and asset.coingecko_id:
         quote = await fetch_coingecko_quote(asset.coingecko_id, symbol.upper())
-        if quote:
-            return quote
 
-    if symbol.upper() in COINGECKO_IDS:
+    if quote is None and symbol.upper() in COINGECKO_IDS:
         quote = await fetch_coingecko_quote(COINGECKO_IDS[symbol.upper()], symbol.upper())
-        if quote:
-            return quote
 
-    try:
-        return fetch_yfinance_quote(symbol)
-    except Exception:
+    if quote is None:
+        try:
+            quote = fetch_yfinance_quote(symbol)
+        except Exception:
+            quote = None
+    if quote is None:
         return None
+    info = session_info(quote.symbol, quote.asset_class, asset.exchange if asset else None)
+    return quote.model_copy(
+        update={
+            "delayed": info.delayed,
+            "source": info.source,
+            "venue_label": info.venue_label,
+            "market_open": info.market_open,
+            "session_label": info.session_label,
+        }
+    )
 
 
 ALLOWED_PERIODS = {"1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y"}

@@ -19,6 +19,10 @@ class PositionOut(ORMModel):
     market_value: Decimal | None = None
     unrealized_pnl: Decimal | None = None
     unrealized_pnl_pct: float | None = None
+    quote_as_of: datetime | None = None
+    delayed: bool | None = None
+    market_open: bool | None = None
+    session_label: str | None = None
 
 
 class TransactionOut(ORMModel):

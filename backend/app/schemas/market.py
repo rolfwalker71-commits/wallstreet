@@ -15,6 +15,11 @@ class QuoteOut(BaseModel):
     currency: str = "USD"
     as_of: datetime
     volume: float | None = None
+    delayed: bool = True
+    source: str | None = None
+    venue_label: str | None = None
+    market_open: bool | None = None
+    session_label: str | None = None
 
 
 class TechnicalsOut(BaseModel):
