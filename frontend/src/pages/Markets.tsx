@@ -163,7 +163,7 @@ export function MarketsPage() {
                   <td className="px-3 py-2 font-medium text-primary">{a.symbol}</td>
                   <td className="px-3 py-2">{a.name}</td>
                   <td className="px-3 py-2">{CLASS_LABEL[a.asset_class] ?? a.asset_class}</td>
-                  <td className={`px-3 py-2 ${signedClass(quotes[a.symbol]?.change_pct)}`}>
+                  <td className={`max-w-[11rem] px-3 py-2 align-top ${signedClass(quotes[a.symbol]?.change_pct)}`}>
                     {money(quotes[a.symbol]?.price ?? a.last_price, a.currency)}
                     <QuoteStamp
                       asOf={quotes[a.symbol]?.as_of ?? a.last_price_at}

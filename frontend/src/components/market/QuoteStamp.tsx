@@ -11,29 +11,24 @@ type Stamp = {
 export function QuoteStamp({ asOf, delayed, sessionLabel, marketOpen, venueLabel }: Stamp) {
   if (!asOf && delayed == null && !sessionLabel) return null;
   const closed = marketOpen === false;
+  const freshness =
+    delayed === true ? "verzögert" : delayed === false ? "nahezu aktuell" : null;
+
   return (
-    <p className="mt-1 w-full text-sm leading-snug text-muted-foreground">
-      {asOf ? <>Stand {when(asOf)}</> : null}
-      {delayed === true ? (
-        <>
-          {asOf ? " · " : ""}
-          <span className="font-medium">verzögert</span>
-        </>
-      ) : delayed === false ? (
-        <>
-          {asOf ? " · " : ""}
-          nahezu aktuell
-        </>
+    <div className="mt-1 w-full min-w-0 space-y-0.5 text-sm leading-snug text-muted-foreground">
+      {asOf || freshness ? (
+        <p className="break-words">
+          {asOf ? `Stand ${when(asOf)}` : null}
+          {asOf && freshness ? " · " : null}
+          {freshness ? <span className="font-medium">{freshness}</span> : null}
+        </p>
       ) : null}
       {sessionLabel ? (
-        <>
-          {" · "}
-          <span className={closed ? "font-medium text-loss" : "text-gain"}>
-            {venueLabel ? `${venueLabel}: ` : ""}
-            {sessionLabel}
-          </span>
-        </>
+        <p className={`break-words ${closed ? "font-medium text-loss" : "font-medium text-gain"}`}>
+          {sessionLabel}
+          {venueLabel ? ` · ${venueLabel}` : ""}
+        </p>
       ) : null}
-    </p>
+    </div>
   );
 }
