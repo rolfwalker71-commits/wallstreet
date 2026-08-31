@@ -85,6 +85,7 @@ class ExecuteTradeIn(BaseModel):
     recommendation_id: UUID | None = None
     source: TransactionSource = TransactionSource.MANUAL
     note: str | None = None
+    executed_at: datetime | None = None
 
 
 class ApplyRecommendationIn(BaseModel):

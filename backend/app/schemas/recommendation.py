@@ -41,3 +41,4 @@ class RecommendationOut(ORMModel):
     created_at: datetime
     asset: AssetOut
     agent_logs: list[AgentLogOut] = []
+    outcome: dict | None = None

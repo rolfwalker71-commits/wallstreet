@@ -100,7 +100,7 @@ async def execute_trade(session: AsyncSession, payload: ExecuteTradeIn) -> Trans
         fee=Decimal("0"),
         realized_pnl=realized,
         currency=asset.currency,
-        executed_at=datetime.now(UTC),
+        executed_at=payload.executed_at or datetime.now(UTC),
         note=payload.note,
     )
     session.add(tx)

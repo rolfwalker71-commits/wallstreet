@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.models import AgentLog
 from app.models.enums import AgentName
 from app.schemas.recommendation import AgentLogOut, RecommendationOut
+from app.services.prefs import get_prefs
 from app.services.usage import usage_summary
 
 router = APIRouter()
@@ -34,14 +35,19 @@ async def list_logs(
 @router.get("/usage")
 async def llm_usage(db: AsyncSession = Depends(get_db)) -> dict:
     settings = get_settings()
+    prefs = await get_prefs(db)
     summary = await usage_summary(db)
-    cycles_per_day = 24 * 60 / max(5, settings.agent_cron_minutes)
-    summary["interval_minutes"] = settings.agent_cron_minutes
+    minutes = prefs.agent_interval_minutes
+    cycles_per_day = 24 * 60 / max(5, minutes)
+    summary["interval_minutes"] = minutes
     summary["cycles_per_day"] = round(cycles_per_day, 1)
+    summary["watchlist_only"] = prefs.agent_watchlist_only
+    summary["mini_only"] = prefs.agent_mini_only
+    discover = "ohne Discover" if prefs.agent_watchlist_only else "1× Discover (mini)"
+    model = settings.openai_mini_model if prefs.agent_mini_only else "Hauptmodell / Mini"
     summary["estimate"] = (
-        "Pro Lauf: 1× Discover (mini) plus je Titel Research (mini), "
-        "Strategist (Hauptmodell) und Educator (mini). "
-        f"Intervall {settings.agent_cron_minutes} Min → ca. {cycles_per_day:.0f} Läufe/Tag. "
+        f"Pro Lauf: {discover}, je Titel Research/Quant/Strategist ({model}). "
+        f"Intervall {minutes} Min → ca. {cycles_per_day:.0f} Läufe/Tag. "
         "Push nur bei neuem Kauf/Verkauf, nicht bei jedem Halten."
     )
     return summary

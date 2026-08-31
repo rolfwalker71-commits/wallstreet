@@ -10,8 +10,10 @@ from app.models import Asset, Recommendation
 from app.models.enums import AssetClass, RecommendationAction, RecommendationStatus
 from app.schemas.portfolio import ApplyRecommendationIn, TransactionOut
 from app.schemas.recommendation import RecommendationOut
+from app.services.outcomes import ensure_outcome, summarize_outcomes
 from app.services.picks import list_buy_picks
 from app.services.portfolio import TradeError, execute_recommendation
+from app.services.rec_out import recommendation_out
 from app.services.swiss_tradable import is_swiss_buyable
 
 router = APIRouter()
@@ -26,7 +28,7 @@ async def list_buy_now_picks(
     await db.commit()
     for row in rows:
         await db.refresh(row, attribute_names=["asset", "agent_logs"])
-    return [RecommendationOut.model_validate(r) for r in rows]
+    return [recommendation_out(r) for r in rows]
 
 
 @router.post("/picks/refresh", response_model=list[RecommendationOut])
@@ -37,7 +39,7 @@ async def refresh_buy_now_picks(
     await db.commit()
     for row in rows:
         await db.refresh(row, attribute_names=["asset", "agent_logs"])
-    return [RecommendationOut.model_validate(r) for r in rows]
+    return [recommendation_out(r) for r in rows]
 
 
 @router.get("", response_model=list[RecommendationOut])
@@ -57,6 +59,7 @@ async def list_recommendations(
         .options(
             selectinload(Recommendation.asset),
             selectinload(Recommendation.agent_logs),
+            selectinload(Recommendation.outcome),
         )
         .order_by(Recommendation.created_at.desc())
         .limit(200 if latest else limit)
@@ -88,7 +91,12 @@ async def list_recommendations(
             if len(uniq) >= limit:
                 break
         rows = uniq
-    return [RecommendationOut.model_validate(r) for r in rows]
+    return [recommendation_out(r) for r in rows]
+
+
+@router.get("/outcomes/summary")
+async def outcome_summary(db: AsyncSession = Depends(get_db)) -> dict:
+    return await summarize_outcomes(db)
 
 
 @router.get("/{rec_id}", response_model=RecommendationOut)
@@ -102,13 +110,30 @@ async def get_recommendation(
             .options(
                 selectinload(Recommendation.asset),
                 selectinload(Recommendation.agent_logs),
+                selectinload(Recommendation.outcome),
             )
             .where(Recommendation.id == rec_id)
         )
     ).scalar_one_or_none()
     if rec is None:
         raise HTTPException(404, "Empfehlung nicht gefunden")
-    return RecommendationOut.model_validate(rec)
+    try:
+        await ensure_outcome(db, rec)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+    rec = (
+        await db.execute(
+            select(Recommendation)
+            .options(
+                selectinload(Recommendation.asset),
+                selectinload(Recommendation.agent_logs),
+                selectinload(Recommendation.outcome),
+            )
+            .where(Recommendation.id == rec_id)
+        )
+    ).scalar_one()
+    return recommendation_out(rec)
 
 
 @router.post("/{rec_id}/execute", response_model=TransactionOut)

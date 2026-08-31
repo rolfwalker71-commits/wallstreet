@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Recommendation
 from app.models.enums import RecommendationAction
-from app.models.settings import PushSubscription
+from app.models.settings import AppSetting, PushSubscription
+from app.services.prefs import get_prefs
 from app.services.vapid import ensure_vapid, load_vapid_private
 
 logger = logging.getLogger(__name__)
@@ -70,12 +71,31 @@ async def delete_subscription(session: AsyncSession, endpoint: str) -> bool:
     return True
 
 
-def should_notify(rec: Recommendation, previous: Recommendation | None) -> bool:
+def should_notify(
+    rec: Recommendation,
+    previous: Recommendation | None,
+    *,
+    min_confidence: float = 0.0,
+) -> bool:
     if rec.action not in {RecommendationAction.BUY, RecommendationAction.SELL}:
+        return False
+    try:
+        conf = float(rec.confidence)
+    except (TypeError, ValueError):
+        conf = 0.0
+    if conf < min_confidence:
         return False
     if previous is None:
         return True
     return previous.action != rec.action
+
+
+DIGEST_KEY = "push_digest_queue"
+
+
+def _digest_line(rec: Recommendation) -> str:
+    action = "Kauf" if rec.action.value == "buy" else "Verkauf"
+    return f"{action} {rec.asset.symbol}"
 
 
 async def previous_recommendation(
@@ -163,15 +183,98 @@ async def broadcast(session: AsyncSession, payload: dict) -> int:
     return sent
 
 
+async def _queue_digest(session: AsyncSession, recs: list[Recommendation]) -> int:
+    from sqlalchemy import select
+
+    row = (
+        await session.execute(select(AppSetting).where(AppSetting.key == DIGEST_KEY))
+    ).scalar_one_or_none()
+    existing = []
+    if row and row.value:
+        try:
+            import json
+
+            existing = json.loads(row.value)
+        except Exception:
+            existing = []
+    if not isinstance(existing, list):
+        existing = []
+    seen = {item.get("id") for item in existing if isinstance(item, dict)}
+    for rec in recs:
+        rid = str(rec.id)
+        if rid in seen:
+            continue
+        existing.append(
+            {
+                "id": rid,
+                "line": _digest_line(rec),
+                "url": f"/signals/{rec.id}",
+            }
+        )
+        seen.add(rid)
+    payload = __import__("json").dumps(existing, ensure_ascii=False)
+    if row:
+        row.value = payload
+    else:
+        session.add(AppSetting(key=DIGEST_KEY, value=payload))
+    await session.flush()
+    return len(recs)
+
+
+async def flush_digest(session: AsyncSession) -> int:
+    import json
+
+    from sqlalchemy import select
+
+    if await subscription_count(session) == 0:
+        return 0
+    row = (
+        await session.execute(select(AppSetting).where(AppSetting.key == DIGEST_KEY))
+    ).scalar_one_or_none()
+    items = []
+    if row and row.value:
+        try:
+            items = json.loads(row.value)
+        except Exception:
+            items = []
+    if not items:
+        return 0
+    lines = [str(i.get("line")) for i in items if isinstance(i, dict) and i.get("line")]
+    body = ", ".join(lines[:6])
+    if len(lines) > 6:
+        body += f" · +{len(lines) - 6} weitere"
+    sent = await broadcast(
+        session,
+        {
+            "title": f"Tagesdigest: {len(lines)} Signale",
+            "body": body or "Neue Kauf- und Verkaufssignale.",
+            "url": "/",
+            "tag": "digest",
+        },
+    )
+    if row:
+        row.value = "[]"
+        await session.flush()
+    return sent
+
+
 async def notify_new_signals(session: AsyncSession, recs: list[Recommendation]) -> int:
     if not recs:
         return 0
     if await subscription_count(session) == 0:
         return 0
-    sent = 0
+    prefs = await get_prefs(session)
+    eligible: list[Recommendation] = []
     for rec in recs:
         prev = await previous_recommendation(session, rec.asset_id, rec.id)
-        if not should_notify(rec, prev):
+        if not should_notify(rec, prev, min_confidence=prefs.push_min_confidence):
             continue
+        eligible.append(rec)
+    if not eligible:
+        return 0
+    if prefs.push_digest:
+        return await _queue_digest(session, eligible)
+    sent = 0
+    for rec in eligible:
         sent += await broadcast(session, _payload(rec))
     return sent

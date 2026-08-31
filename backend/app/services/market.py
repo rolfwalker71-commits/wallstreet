@@ -260,6 +260,17 @@ async def persist_quote(session: AsyncSession, quote: QuoteOut) -> Asset | None:
     asset.last_price = quote.price
     asset.last_price_at = quote.as_of
     await session.flush()
+    try:
+        from app.services.alerts import check_alerts
+
+        await check_alerts(
+            session,
+            symbol=quote.symbol,
+            price=float(quote.price),
+            change_pct=quote.change_pct,
+        )
+    except Exception:
+        pass
     return asset
 
 

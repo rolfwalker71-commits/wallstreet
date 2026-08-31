@@ -60,12 +60,27 @@ async def lifespan(_app: FastAPI):
                     f"NUMERIC(5, 2) NOT NULL DEFAULT {default}"
                 )
             )
+        await conn.execute(text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS user_note TEXT"))
+        await conn.execute(
+            text(
+                "DO $$ BEGIN "
+                "CREATE TYPE alert_kind AS ENUM ('below', 'above', 'pct_today'); "
+                "EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
+            )
+        )
     async with async_session_factory() as session:
         await seed_if_empty(session)
         from app.services.vapid import ensure_vapid
 
         await ensure_vapid(session, subject=settings.vapid_subject)
+        from app.agents.llm import set_mini_only
+        from app.jobs.scheduler import reschedule_agent
+        from app.services.prefs import get_prefs
+
+        prefs = await get_prefs(session)
+        set_mini_only(prefs.agent_mini_only)
     start_scheduler()
+    reschedule_agent(prefs.agent_interval_minutes)
     logger.info(
         "Wallstreet API bereit (v%s, LLM %s)",
         __version__,

@@ -54,3 +54,9 @@ class Sentiment(str, enum.Enum):
     BULLISH = "bullish"
     BEARISH = "bearish"
     NEUTRAL = "neutral"
+
+
+class AlertKind(str, enum.Enum):
+    BELOW = "below"
+    ABOVE = "above"
+    PCT_TODAY = "pct_today"

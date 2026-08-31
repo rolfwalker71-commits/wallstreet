@@ -1,17 +1,26 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
-from app.models import Transaction
+from app.models import Asset, Transaction
+from app.models.enums import TransactionSource
 from app.schemas.portfolio import ExecuteTradeIn, PortfolioOut, PortfolioTargetsIn, TransactionOut
+from app.services.assets import AssetError, get_or_create_asset
+from app.services.core_products import symbol_for_isin
+from app.services.csv_trades import parse_trade_rows
+from app.services.equity import portfolio_curve
+from app.services.market import get_quote
 from app.services.portfolio import (
     TradeError,
     decorate_portfolio,
     execute_trade,
     get_primary_portfolio,
 )
+from app.services.rebalance import propose_rebalance
+from app.services.swiss_tradable import is_swiss_buyable
 
 router = APIRouter()
 
@@ -82,3 +91,101 @@ async def place_trade(
         raise HTTPException(400, str(exc)) from exc
     await db.refresh(tx, attribute_names=["asset"])
     return TransactionOut.model_validate(tx)
+
+
+class CsvImportIn(BaseModel):
+    csv: str
+
+
+async def _resolve_import_symbol(db: AsyncSession, row: dict) -> str:
+    if row.get("symbol"):
+        return row["symbol"]
+    isin = row.get("isin")
+    if not isin:
+        raise TradeError("ISIN oder Symbol fehlt.")
+    existing = (
+        await db.execute(select(Asset).where(Asset.isin == isin))
+    ).scalar_one_or_none()
+    if existing:
+        return existing.symbol
+    core = symbol_for_isin(isin)
+    if core:
+        return core
+    raise TradeError(f"ISIN {isin} unbekannt — bitte Symbol in der Zeile setzen.")
+
+
+@router.get("/curve")
+async def equity_curve(db: AsyncSession = Depends(get_db)) -> dict:
+    pf = await get_primary_portfolio(db)
+    if pf is None:
+        raise HTTPException(404, "Kein Depot vorhanden")
+    return await portfolio_curve(pf)
+
+
+@router.get("/rebalance")
+async def rebalance_plan(db: AsyncSession = Depends(get_db)) -> dict:
+    pf = await get_primary_portfolio(db)
+    if pf is None:
+        raise HTTPException(404, "Kein Depot vorhanden")
+    data = await decorate_portfolio(db, pf)
+    held = {
+        (p["asset"].symbol if hasattr(p["asset"], "symbol") else p["asset"]["symbol"]).upper()
+        for p in data["positions"]
+    }
+    quotes: dict = {}
+    from app.services.picks import _plan_symbols
+
+    for symbol, _gap in _plan_symbols(data["allocation"], held):
+        try:
+            asset = await get_or_create_asset(db, symbol, watched=True)
+        except AssetError:
+            continue
+        try:
+            quote = await get_quote(asset.symbol, db)
+        except Exception:
+            quote = None
+        price = float(quote.price) if quote else (float(asset.last_price) if asset.last_price else None)
+        quotes[symbol] = {
+            "price": price,
+            "currency": asset.currency,
+            "name": asset.name,
+            "asset_class": asset.asset_class,
+            "exchange": asset.exchange,
+            "swiss_buyable": is_swiss_buyable(asset.symbol, asset.asset_class, asset.exchange),
+        }
+    proposals = propose_rebalance(allocation=data["allocation"], held=held, quotes=quotes, limit=2)
+    return {"items": proposals}
+
+
+@router.post("/import")
+async def import_csv(payload: CsvImportIn, db: AsyncSession = Depends(get_db)) -> dict:
+    pf = await get_primary_portfolio(db)
+    if pf is None:
+        raise HTTPException(404, "Kein Depot vorhanden")
+    rows, errors = parse_trade_rows(payload.csv)
+    imported: list[dict] = []
+    for row in rows:
+        try:
+            symbol = await _resolve_import_symbol(db, row)
+            try:
+                await get_or_create_asset(db, symbol, watched=True)
+            except AssetError as exc:
+                raise TradeError(str(exc)) from exc
+            tx = await execute_trade(
+                db,
+                ExecuteTradeIn(
+                    portfolio_id=pf.id,
+                    symbol=symbol,
+                    side=row["side"],
+                    quantity=row["qty"],
+                    price=row["price"],
+                    source=TransactionSource.MANUAL,
+                    note="CSV-Import",
+                    executed_at=row["date"],
+                ),
+            )
+            imported.append({"row": row["row"], "id": str(tx.id), "symbol": symbol})
+        except (TradeError, AssetError) as exc:
+            errors.append({"row": row["row"], "error": str(exc)})
+    await db.commit()
+    return {"imported": len(imported), "items": imported, "errors": errors}

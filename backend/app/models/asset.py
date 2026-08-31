@@ -11,6 +11,7 @@ from app.models.enums import AssetClass
 from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from app.models.alert import PriceAlert
     from app.models.news import NewsItem
     from app.models.portfolio import Position
     from app.models.recommendation import Recommendation
@@ -43,9 +44,14 @@ class Asset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     extra: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    user_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     watched: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
 
     recommendations: Mapped[list["Recommendation"]] = relationship(
+        back_populates="asset",
+        cascade="all, delete-orphan",
+    )
+    price_alerts: Mapped[list["PriceAlert"]] = relationship(
         back_populates="asset",
         cascade="all, delete-orphan",
     )

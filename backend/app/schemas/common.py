@@ -37,6 +37,10 @@ class AssetWatchIn(BaseModel):
     watched: bool
 
 
+class AssetNoteIn(BaseModel):
+    user_note: str | None = None
+
+
 class TitleSearchHit(BaseModel):
     symbol: str
     name: str
@@ -63,6 +67,7 @@ class AssetOut(ORMModel):
     isin: str | None = None
     watched: bool = True
     notes: str | None = None
+    user_note: str | None = None
 
 
 class GlossaryTermOut(ORMModel):

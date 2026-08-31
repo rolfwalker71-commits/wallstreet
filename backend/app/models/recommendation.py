@@ -13,6 +13,7 @@ from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 if TYPE_CHECKING:
     from app.models.agent_log import AgentLog
     from app.models.asset import Asset
+    from app.models.outcome import SignalOutcome
     from app.models.transaction import Transaction
 
 
@@ -56,4 +57,9 @@ class Recommendation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     transactions: Mapped[list["Transaction"]] = relationship(
         back_populates="recommendation",
+    )
+    outcome: Mapped["SignalOutcome | None"] = relationship(
+        back_populates="recommendation",
+        uselist=False,
+        cascade="all, delete-orphan",
     )

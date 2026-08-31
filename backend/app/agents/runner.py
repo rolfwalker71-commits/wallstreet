@@ -10,7 +10,10 @@ from sqlalchemy.orm import selectinload
 
 from app.agents.discover import discover_ideas, related_symbols
 from app.agents.graph import agent_graph
+from app.agents.llm import set_mini_only
 from app.config import get_settings
+from app.services.alerts import check_alerts
+from app.services.prefs import get_prefs
 from app.models import AgentLog, Asset, Recommendation
 from app.models.enums import (
     AgentLogStatus,
@@ -217,6 +220,8 @@ async def run_for_asset(
 
 async def run_watchlist_cycle(session: AsyncSession, symbols: list[str] | None = None) -> list[Recommendation]:
     settings = get_settings()
+    prefs = await get_prefs(session)
+    set_mini_only(prefs.agent_mini_only)
     reasons: dict[str, str] = {}
     if symbols:
         wanted = [s.upper() for s in symbols]
@@ -238,14 +243,15 @@ async def run_watchlist_cycle(session: AsyncSession, symbols: list[str] | None =
                 await session.execute(select(Asset).where(Asset.symbol.in_(wanted)))
             ).scalars().all()
         seen = {a.symbol for a in assets}
-        with usage_scope() as bucket:
-            ideas = await discover_ideas(session, limit=5)
-            await persist_usage(session, bucket)
-        for extra, reason in ideas:
-            reasons[extra.symbol] = reason
-            if extra.symbol not in seen:
-                assets.append(extra)
-                seen.add(extra.symbol)
+        if not prefs.agent_watchlist_only:
+            with usage_scope() as bucket:
+                ideas = await discover_ideas(session, limit=5)
+                await persist_usage(session, bucket)
+            for extra, reason in ideas:
+                reasons[extra.symbol] = reason
+                if extra.symbol not in seen:
+                    assets.append(extra)
+                    seen.add(extra.symbol)
 
     results: list[Recommendation] = []
     for asset in assets:
@@ -254,6 +260,7 @@ async def run_watchlist_cycle(session: AsyncSession, symbols: list[str] | None =
         await session.commit()
     try:
         await notify_new_signals(session, results)
+        await check_alerts(session)
         await session.commit()
     except Exception:
         await session.rollback()

@@ -144,6 +144,16 @@ def core_of(symbol: str) -> dict | None:
     return CORE.get(symbol.strip().upper())
 
 
+def symbol_for_isin(isin: str) -> str | None:
+    wanted = isin.strip().upper()
+    if not wanted:
+        return None
+    for symbol, meta in CORE.items():
+        if str(meta.get("isin") or "").upper() == wanted:
+            return symbol
+    return None
+
+
 def peers_of(symbol: str) -> list[str]:
     row = core_of(symbol)
     return list(row["peers"]) if row else []
