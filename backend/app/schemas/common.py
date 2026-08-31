@@ -47,6 +47,7 @@ class AssetOut(ORMModel):
     last_price: Decimal | None
     last_price_at: datetime | None
     sector: str | None
+    isin: str | None = None
     watched: bool = True
     notes: str | None = None
 

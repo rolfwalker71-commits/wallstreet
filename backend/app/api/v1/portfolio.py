@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.models import Transaction
-from app.schemas.portfolio import ExecuteTradeIn, PortfolioOut, TransactionOut
+from app.schemas.portfolio import ExecuteTradeIn, PortfolioOut, PortfolioTargetsIn, TransactionOut
 from app.services.portfolio import (
     TradeError,
     decorate_portfolio,
@@ -21,6 +21,35 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)) -> PortfolioOut:
     pf = await get_primary_portfolio(db)
     if pf is None:
         raise HTTPException(404, "Kein Depot vorhanden")
+    data = await decorate_portfolio(db, pf)
+    return PortfolioOut.model_validate(data)
+
+
+@router.patch("/targets", response_model=PortfolioOut)
+async def patch_targets(
+    payload: PortfolioTargetsIn,
+    db: AsyncSession = Depends(get_db),
+) -> PortfolioOut:
+    pf = await get_primary_portfolio(db)
+    if pf is None:
+        raise HTTPException(404, "Kein Depot vorhanden")
+    total = (
+        payload.target_stock_pct
+        + payload.target_bond_pct
+        + payload.target_commodity_pct
+        + payload.target_crypto_pct
+        + payload.target_cash_pct
+    )
+    if abs(float(total) - 100) > 0.6:
+        raise HTTPException(400, "Zielquoten müssen zusammen 100 % ergeben.")
+    pf.target_stock_pct = payload.target_stock_pct
+    pf.target_bond_pct = payload.target_bond_pct
+    pf.target_commodity_pct = payload.target_commodity_pct
+    pf.target_crypto_pct = payload.target_crypto_pct
+    pf.target_cash_pct = payload.target_cash_pct
+    pf.max_single_position_pct = payload.max_single_position_pct
+    await db.commit()
+    pf = await get_primary_portfolio(db)
     data = await decorate_portfolio(db, pf)
     return PortfolioOut.model_validate(data)
 

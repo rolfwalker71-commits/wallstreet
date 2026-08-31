@@ -36,21 +36,25 @@ WATCHLIST_META: dict[str, dict] = {
         "name": "Vanguard FTSE All-World UCITS ETF",
         "asset_class": AssetClass.ETF,
         "exchange": "XETRA",
+        "isin": "IE00BK5BQT80",
     },
     "CSSMI.SW": {
         "name": "iShares SMI (CH)",
         "asset_class": AssetClass.ETF,
         "exchange": "SIX",
+        "isin": "CH0008899764",
     },
     "IDTL.L": {
         "name": "iShares $ Treasury Bond 20+yr UCITS ETF",
         "asset_class": AssetClass.BOND,
         "exchange": "LSE",
+        "isin": "IE00BSKRJZ44",
     },
     "ZGLD.SW": {
-        "name": "Swisscanto Gold ETF",
+        "name": "Swisscanto (CH) Gold ETF EA CHF",
         "asset_class": AssetClass.COMMODITY,
         "exchange": "SIX",
+        "isin": "CH0139101593",
     },
 }
 
@@ -87,6 +91,7 @@ async def seed_if_empty(session: AsyncSession) -> None:
                     exchange=meta.get("exchange"),
                     coingecko_id=meta.get("coingecko_id"),
                     currency="USD",
+                    isin=meta.get("isin"),
                     watched=True,
                 )
             )
@@ -132,6 +137,7 @@ async def seed_if_empty(session: AsyncSession) -> None:
                     asset_class=meta["asset_class"],
                     exchange=meta.get("exchange"),
                     currency=currency,
+                    isin=meta.get("isin"),
                     watched=True,
                 )
             )
@@ -139,5 +145,7 @@ async def seed_if_empty(session: AsyncSession) -> None:
             found.watched = True
             found.asset_class = meta["asset_class"]
             found.name = meta["name"]
+            if meta.get("isin") and not found.isin:
+                found.isin = meta["isin"]
 
     await session.commit()

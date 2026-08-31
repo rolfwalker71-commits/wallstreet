@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 import { PositionSinceChart } from "@/components/charts/PositionSinceChart";
+import { AllocationPanel } from "@/components/portfolio/AllocationPanel";
 import { api, type Asset, type Portfolio, type Transaction } from "@/lib/api";
 import { SignedMoney, SignedPct } from "@/components/ui/Signed";
 import { money, number, when } from "@/lib/format";
-import { fieldClass, listTileClass, panelClass, type Chrome } from "@/lib/platform";
+import { fieldClass, listTileClass, panelClass, primaryActionClass, type Chrome } from "@/lib/platform";
 
 export function WalletPage() {
   const { chrome } = useOutletContext<{ chrome: Chrome }>();
@@ -17,6 +18,15 @@ export function WalletPage() {
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [qty, setQty] = useState("1");
   const [price, setPrice] = useState("");
+  const [targets, setTargets] = useState({
+    stock: "60",
+    bond: "20",
+    commodity: "5",
+    crypto: "0",
+    cash: "15",
+    maxSingle: "5",
+  });
+  const [targetBusy, setTargetBusy] = useState(false);
 
   const reload = () =>
     Promise.all([api.portfolio(), api.transactions()]).then(([p, t]) => {
@@ -25,10 +35,20 @@ export function WalletPage() {
     });
 
   useEffect(() => {
-    Promise.all([reload(), api.assets()])
-      .then(([, a]) => {
+    Promise.all([api.portfolio(), api.transactions(), api.assets()])
+      .then(([p, t, a]) => {
+        setPf(p);
+        setTxs(t);
         setAssets(a.items);
         if (a.items[0]) setSymbol(a.items[0].symbol);
+        setTargets({
+          stock: String(Number(p.target_stock_pct ?? 60)),
+          bond: String(Number(p.target_bond_pct ?? 20)),
+          commodity: String(Number(p.target_commodity_pct ?? 5)),
+          crypto: String(Number(p.target_crypto_pct ?? 0)),
+          cash: String(Number(p.target_cash_pct ?? 15)),
+          maxSingle: String(Number(p.max_single_position_pct ?? 5)),
+        });
       })
       .catch((e: Error) => setError(e.message));
   }, []);
@@ -126,6 +146,67 @@ export function WalletPage() {
         </div>
       </section>
 
+      {pf.allocation ? <AllocationPanel allocation={pf.allocation} chrome={chrome} /> : null}
+
+      <section className={`${panelClass(chrome)} px-4 py-4`}>
+        <h3 className="text-lg font-semibold">Zielquoten</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Summe 100 %. Einzelaktien-Deckel gilt nicht für den Kern-ETF (VWCE).
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          {(
+            [
+              ["stock", "Aktien %"],
+              ["bond", "Obligationen %"],
+              ["commodity", "Rohstoffe %"],
+              ["crypto", "Crypto %"],
+              ["cash", "Cash %"],
+              ["maxSingle", "Max. Einzeltitel %"],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key} className="block">
+              <span className="mb-1 block text-sm text-muted-foreground">{label}</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                max="100"
+                step="1"
+                value={targets[key]}
+                onChange={(e) => setTargets((prev) => ({ ...prev, [key]: e.target.value }))}
+                className={fieldClass(chrome)}
+              />
+            </label>
+          ))}
+        </div>
+        <button
+          type="button"
+          disabled={targetBusy}
+          className={`mt-3 ${primaryActionClass(chrome)} disabled:opacity-60`}
+          onClick={async () => {
+            setTargetBusy(true);
+            setError(null);
+            try {
+              const next = await api.setTargets({
+                target_stock_pct: Number(targets.stock),
+                target_bond_pct: Number(targets.bond),
+                target_commodity_pct: Number(targets.commodity),
+                target_crypto_pct: Number(targets.crypto),
+                target_cash_pct: Number(targets.cash),
+                max_single_position_pct: Number(targets.maxSingle),
+              });
+              setPf(next);
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Ziele speichern fehlgeschlagen");
+            } finally {
+              setTargetBusy(false);
+            }
+          }}
+        >
+          {targetBusy ? "Speichert…" : "Ziele speichern"}
+        </button>
+      </section>
+
       <section className={`${panelClass(chrome)} px-4 py-4`}>
         <h3 className="text-lg font-semibold">Position buchen</h3>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -217,7 +298,11 @@ export function WalletPage() {
         <h3 className="mb-2 text-lg font-semibold">Positionen</h3>
         {pf.positions.length === 0 ? (
           <p className={`${listTileClass(chrome)} px-4 py-6 text-muted-foreground`}>
-            Noch keine Positionen. Buche oben einen Kauf mit Anzahl und Einstand.
+            Noch keine Positionen.{" "}
+            <Link to="/empfehlungen" className="text-primary underline-offset-2 hover:underline">
+              Startkauf VWCE.DE unter Empfehlungen
+            </Link>{" "}
+            oder hier manuell buchen.
           </p>
         ) : (
           <ul className="space-y-3">

@@ -52,6 +52,22 @@ class PortfolioOut(ORMModel):
     positions: list[PositionOut] = []
     benchmark_return_pct: float | None = None
     vs_benchmark_pct: float | None = None
+    target_stock_pct: Decimal | None = None
+    target_bond_pct: Decimal | None = None
+    target_commodity_pct: Decimal | None = None
+    target_crypto_pct: Decimal | None = None
+    target_cash_pct: Decimal | None = None
+    max_single_position_pct: Decimal | None = None
+    allocation: dict | None = None
+
+
+class PortfolioTargetsIn(BaseModel):
+    target_stock_pct: Decimal = Field(ge=0, le=100)
+    target_bond_pct: Decimal = Field(ge=0, le=100)
+    target_commodity_pct: Decimal = Field(ge=0, le=100)
+    target_crypto_pct: Decimal = Field(ge=0, le=100)
+    target_cash_pct: Decimal = Field(ge=0, le=100)
+    max_single_position_pct: Decimal = Field(default=Decimal("5"), ge=1, le=40)
 
 
 class ExecuteTradeIn(BaseModel):

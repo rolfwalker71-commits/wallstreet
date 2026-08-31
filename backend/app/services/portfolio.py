@@ -15,6 +15,7 @@ from app.models.enums import (
     TransactionSource,
 )
 from app.schemas.portfolio import ExecuteTradeIn
+from app.services.allocation import compute_allocation
 from app.services.market import benchmark_return_pct, get_quote
 
 
@@ -227,6 +228,13 @@ async def decorate_portfolio(session: AsyncSession, portfolio: Portfolio) -> dic
         "positions": positions_out,
         "benchmark_return_pct": bench,
         "vs_benchmark_pct": vs_bench,
+        "target_stock_pct": getattr(portfolio, "target_stock_pct", None),
+        "target_bond_pct": getattr(portfolio, "target_bond_pct", None),
+        "target_commodity_pct": getattr(portfolio, "target_commodity_pct", None),
+        "target_crypto_pct": getattr(portfolio, "target_crypto_pct", None),
+        "target_cash_pct": getattr(portfolio, "target_cash_pct", None),
+        "max_single_position_pct": getattr(portfolio, "max_single_position_pct", None),
+        "allocation": compute_allocation(portfolio, positions_out),
     }
 
 

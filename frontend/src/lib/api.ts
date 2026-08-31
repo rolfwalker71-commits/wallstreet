@@ -11,8 +11,66 @@ export interface Asset {
   last_price: string | null;
   last_price_at: string | null;
   sector: string | null;
+  isin: string | null;
   watched: boolean;
   notes: string | null;
+}
+
+export interface SleeveGap {
+  sleeve: string;
+  label: string;
+  target_pct: number;
+  current_pct: number;
+  gap_pct: number;
+  gap_value: number;
+  current_value: number;
+}
+
+export interface Allocation {
+  equity: number;
+  cash: number;
+  holdings: number;
+  currency: string;
+  max_single_position_pct: number;
+  targets: Record<string, number>;
+  sleeves: SleeveGap[];
+}
+
+export interface Dossier {
+  symbol: string;
+  name: string;
+  asset_class: string;
+  exchange: string | null;
+  currency: string;
+  isin: string | null;
+  sleeve: string;
+  swiss_buyable: boolean;
+  broker_rule: string;
+  ter: number | null;
+  pe_ratio: number | null;
+  dividend_yield: number | null;
+  week52_high: number | null;
+  week52_low: number | null;
+  index_name: string | null;
+  replication: string | null;
+  distribution: string | null;
+  domicile: string | null;
+  kid: boolean | null;
+  justetf_url: string | null;
+  issuer_url: string | null;
+  yahoo_url: string;
+  notes: string[];
+  calendar: Array<{ kind: string; date: string; source: string }>;
+  peers: Array<{
+    symbol: string;
+    name: string;
+    isin?: string;
+    ter?: number;
+    exchange?: string;
+    currency?: string;
+    justetf?: string;
+  }>;
+  as_of: string;
 }
 
 type None = null;
@@ -79,6 +137,13 @@ export interface Portfolio {
   positions: Position[];
   benchmark_return_pct: number | null;
   vs_benchmark_pct: number | null;
+  target_stock_pct: string | null;
+  target_bond_pct: string | null;
+  target_commodity_pct: string | null;
+  target_crypto_pct: string | null;
+  target_cash_pct: string | null;
+  max_single_position_pct: string | null;
+  allocation: Allocation | null;
 }
 
 export interface Transaction {
@@ -172,6 +237,8 @@ export const api = {
   },
   asset: (symbol: string) =>
     request<Asset>(`/api/assets/${encodeURIComponent(symbol)}`),
+  dossier: (symbol: string) =>
+    request<Dossier>(`/api/assets/${encodeURIComponent(symbol)}/dossier`),
   addAsset: (symbol: string, watched = true) =>
     request<Asset>("/api/assets", {
       method: "POST",
@@ -198,6 +265,18 @@ export const api = {
       { method: "POST" },
     ),
   portfolio: () => request<Portfolio>("/api/portfolio"),
+  setTargets: (body: {
+    target_stock_pct: number;
+    target_bond_pct: number;
+    target_commodity_pct: number;
+    target_crypto_pct: number;
+    target_cash_pct: number;
+    max_single_position_pct: number;
+  }) =>
+    request<Portfolio>("/api/portfolio/targets", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
   transactions: () => request<Transaction[]>("/api/portfolio/transactions"),
   trade: (body: {
     portfolio_id: string;

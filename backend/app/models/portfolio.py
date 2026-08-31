@@ -25,6 +25,12 @@ class Portfolio(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     initial_capital: Mapped[Decimal] = mapped_column(Numeric(20, 4))
     is_paper: Mapped[bool] = mapped_column(Boolean, default=True)
     broker_adapter: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    target_stock_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("60"))
+    target_bond_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("20"))
+    target_commodity_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("5"))
+    target_crypto_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
+    target_cash_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("15"))
+    max_single_position_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("5"))
 
     transactions: Mapped[list["Transaction"]] = relationship(
         back_populates="portfolio",

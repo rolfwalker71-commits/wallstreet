@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -18,99 +17,26 @@ from app.models.enums import (
     RecommendationAction,
     RecommendationStatus,
 )
-from app.services.facts import as_float, build_fact_rationale, headlines_from_sources
+from app.services.allocation import compute_allocation, size_order
+from app.services.assets import AssetError, get_or_create_asset
+from app.services.core_products import (
+    CORE,
+    CORE_BY_SLEEVE,
+    SLEEVE_BOND,
+    SLEEVE_COMMODITY,
+    SLEEVE_STOCK,
+    STARTER_SYMBOL,
+    core_of,
+)
+from app.services.market import get_quote
+from app.services.portfolio import decorate_portfolio, get_primary_portfolio
 from app.services.swiss_tradable import is_swiss_buyable
 
-PICKS_STEP = "buy_picks_facts"
-PICKS_TTL = timedelta(hours=12)
-PICKS_LIMIT = 10
-CANDIDATE_POOL = 16
+PICKS_STEP = "buy_picks_gaps"
+PICKS_TTL = timedelta(hours=6)
 
 
-@dataclass(frozen=True)
-class AssetSnapshot:
-    symbol: str
-    name: str
-    asset_class: str
-    exchange: str | None
-    watched: bool
-    notes: str | None
-    last_price: float | None
-    currency: str
-    last_action: str | None
-    last_confidence: float | None
-    headlines: tuple[str, ...]
-    technicals: dict[str, Any]
-
-
-def buy_score(snap: AssetSnapshot) -> float:
-    """Rangfolge für Kauf-Kandidaten. Höher = eher Kauf jetzt."""
-    if not is_swiss_buyable(snap.symbol, snap.asset_class, snap.exchange):
-        return -100.0
-    if snap.asset_class == "forex":
-        return -100.0
-
-    score = 0.0
-    tech = snap.technicals or {}
-    rsi = as_float(tech.get("rsi_14"))
-    sma20 = as_float(tech.get("sma_20"))
-    sma50 = as_float(tech.get("sma_50"))
-    macd = as_float(tech.get("macd"))
-    macd_signal = as_float(tech.get("macd_signal"))
-    close = as_float(tech.get("last_close")) or snap.last_price
-
-    if snap.last_action == "buy":
-        score += 1.8 * (snap.last_confidence or 0.5)
-    elif snap.last_action == "sell":
-        score -= 1.6
-    elif snap.last_action == "hold":
-        score += 0.15
-
-    if rsi is not None:
-        if rsi <= 30:
-            score += 1.4
-        elif rsi <= 40:
-            score += 0.9
-        elif rsi <= 50:
-            score += 0.35
-        elif rsi >= 72:
-            score -= 1.0
-        elif rsi >= 65:
-            score -= 0.4
-
-    if sma20 is not None and sma50 is not None:
-        score += 0.45 if sma20 > sma50 else -0.2
-    if close is not None and sma50 is not None:
-        if close < sma50 and rsi is not None and rsi <= 40:
-            score += 0.35
-        elif close > sma50:
-            score += 0.25
-
-    if macd is not None and macd_signal is not None:
-        score += 0.25 if macd > macd_signal else -0.1
-    return score
-
-
-def fact_rationale(snap: AssetSnapshot, action: str | None = None) -> str:
-    rsi = as_float((snap.technicals or {}).get("rsi_14"))
-    rule = action
-    if rule is None and rsi is not None and rsi <= 32:
-        rule = "buy"
-    body = build_fact_rationale(
-        symbol=snap.symbol,
-        name=snap.name,
-        currency=snap.currency,
-        price=snap.last_price,
-        technicals=snap.technicals,
-        headlines=list(snap.headlines),
-        last_action=snap.last_action,
-        last_confidence=snap.last_confidence,
-        action=rule,
-    )
-    return f"{body} Listenplatz nach RSI, SMA-20/50 und MACD. Keine Kursprognose."
-
-
-def _decimal(value: Any) -> Decimal | None:
+def _dec(value: Any) -> Decimal | None:
     if value is None or value == "":
         return None
     try:
@@ -119,94 +45,46 @@ def _decimal(value: Any) -> Decimal | None:
         return None
 
 
-def _headline_notes(notes: str | None) -> tuple[str, ...]:
-    text = (notes or "").strip()
-    if text.startswith("Headline:"):
-        title = text.removeprefix("Headline:").strip()
-        return (title,) if title else ()
-    return ()
-
-
-def _to_snapshot(asset: Asset, rec: Recommendation | None) -> AssetSnapshot:
-    tech = (rec.technicals if rec else None) or {}
-    headlines = headlines_from_sources(rec.news_sources if rec else None)
-    extra = _headline_notes(asset.notes)
-    merged = tuple(dict.fromkeys([*headlines, *extra]))
-    return AssetSnapshot(
-        symbol=asset.symbol,
-        name=asset.name,
-        asset_class=asset.asset_class.value if hasattr(asset.asset_class, "value") else str(asset.asset_class),
-        exchange=asset.exchange,
-        watched=bool(asset.watched),
-        notes=asset.notes,
-        last_price=as_float(asset.last_price),
-        currency=asset.currency or "USD",
-        last_action=rec.action.value if rec else None,
-        last_confidence=as_float(rec.confidence) if rec else None,
-        headlines=merged,
-        technicals=tech,
-    )
-
-
-async def _latest_recs_by_asset(session: AsyncSession) -> dict:
-    rows = (
-        (
-            await session.execute(
-                select(Recommendation)
-                .options(selectinload(Recommendation.asset))
-                .order_by(Recommendation.created_at.desc())
-            )
+def gap_rationale(
+    *,
+    symbol: str,
+    sleeve_label: str,
+    gap: dict,
+    size: dict,
+    currency: str,
+    price: float | None,
+    asset_ccy: str,
+    empty: bool,
+) -> str:
+    core = core_of(symbol) or {}
+    parts = [
+        f"{core.get('name', symbol)} ({symbol}).",
+        f"Sleeve {sleeve_label}: Ist {gap['current_pct']} %, Ziel {gap['target_pct']} %, Lücke {gap['gap_pct']} % ({gap['gap_value']:.2f} {currency}).",
+    ]
+    if empty and symbol == STARTER_SYMBOL:
+        parts.append("Leeres Depot: erster Kauf ist der Welt-Aktien-UCITS, nicht Einzelaktien.")
+    if core.get("isin"):
+        parts.append(f"ISIN {core['isin']}.")
+    if core.get("ter") is not None:
+        parts.append(f"TER {core['ter']:.2f} % p.a.")
+    if core.get("index_name"):
+        parts.append(f"Index {core['index_name']}.")
+    if core.get("duration_years"):
+        parts.append(f"Effektive Duration ca. {core['duration_years']} Jahre (Emittenten-Factsheet).")
+    if core.get("exchange"):
+        parts.append(f"Börse {core['exchange']}.")
+    parts.extend(core.get("notes") or [])
+    if size.get("qty"):
+        parts.append(
+            f"Vorschlag {int(size['qty'])} Stück à {size['price']} {asset_ccy} "
+            f"≈ {size['amount']} {currency} (Depotwährung, ohne FX-Umrechnung)."
         )
-        .scalars()
-        .all()
-    )
-    latest: dict = {}
-    for row in rows:
-        if row.asset_id not in latest:
-            latest[row.asset_id] = row
-    return latest
-
-
-async def load_snapshots(session: AsyncSession) -> list[AssetSnapshot]:
-    assets = (await session.execute(select(Asset).order_by(Asset.symbol))).scalars().all()
-    recs = await _latest_recs_by_asset(session)
-    snaps: list[AssetSnapshot] = []
-    for asset in assets:
-        if not is_swiss_buyable(asset.symbol, asset.asset_class, asset.exchange):
-            continue
-        snaps.append(_to_snapshot(asset, recs.get(asset.id)))
-    snaps.sort(key=buy_score, reverse=True)
-    return snaps
-
-
-def rank_candidates(snaps: list[AssetSnapshot], pool: int = CANDIDATE_POOL) -> list[AssetSnapshot]:
-    ranked = [s for s in sorted(snaps, key=buy_score, reverse=True) if s.last_action != "sell"]
-    positive = [s for s in ranked if buy_score(s) > 0]
-    return (positive or ranked)[:pool]
-
-
-def _rule_picks(candidates: list[AssetSnapshot], limit: int) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for snap in candidates[:limit]:
-        tech = snap.technicals or {}
-        qty = 0.01 if snap.asset_class == "crypto" else 1
-        rsi = as_float(tech.get("rsi_14"))
-        conf = 0.52
-        if rsi is not None and rsi <= 32:
-            conf = 0.58
-        if snap.last_action == "buy" and snap.last_confidence:
-            conf = max(conf, min(snap.last_confidence, 0.7))
-        out.append(
-            {
-                "symbol": snap.symbol,
-                "confidence": round(conf, 4),
-                "risk_reward_ratio": None,
-                "rationale": fact_rationale(snap),
-                "proposed_qty": qty,
-                "proposed_price": snap.last_price or as_float(tech.get("last_close")),
-            }
-        )
-    return out
+    elif price:
+        parts.append(f"Letzter Kurs {price} {asset_ccy}; Betrag unter einem Stück.")
+    if core.get("justetf"):
+        parts.append(f"Factsheet: {core['justetf']}")
+    parts.append("Keine Live-Prüfung beim Broker. ISIN im Broker suchen. Keine Kursprognose.")
+    return " ".join(parts)
 
 
 async def cached_picks(session: AsyncSession) -> list[Recommendation] | None:
@@ -234,7 +112,7 @@ async def cached_picks(session: AsyncSession) -> list[Recommendation] | None:
                     selectinload(Recommendation.agent_logs),
                 )
                 .where(Recommendation.run_id == log.run_id)
-                .order_by(Recommendation.confidence.desc())
+                .order_by(Recommendation.created_at.asc())
             )
         )
         .scalars()
@@ -243,40 +121,108 @@ async def cached_picks(session: AsyncSession) -> list[Recommendation] | None:
     return list(rows) or None
 
 
+async def _ensure_core(session: AsyncSession, symbol: str) -> Asset | None:
+    try:
+        return await get_or_create_asset(session, symbol, watched=True)
+    except AssetError:
+        row = (
+            await session.execute(select(Asset).where(Asset.symbol == symbol))
+        ).scalar_one_or_none()
+        return row
+
+
+def _plan_symbols(allocation: dict, symbols_held: set[str]) -> list[tuple[str, dict]]:
+    empty = len(symbols_held) == 0
+    has_world = STARTER_SYMBOL in symbols_held
+    has_equity = has_world or any(
+        s["sleeve"] == SLEEVE_STOCK and s["current_pct"] >= 5 for s in allocation["sleeves"]
+    )
+    planned: list[tuple[str, dict]] = []
+    by_sleeve = {s["sleeve"]: s for s in allocation["sleeves"]}
+    stock = by_sleeve[SLEEVE_STOCK]
+    if stock["gap_pct"] >= 1 or empty:
+        planned.append((STARTER_SYMBOL, stock))
+    if not empty and has_equity:
+        comm = by_sleeve[SLEEVE_COMMODITY]
+        if comm["gap_pct"] >= 1:
+            planned.append((CORE_BY_SLEEVE[SLEEVE_COMMODITY], comm))
+        bond = by_sleeve[SLEEVE_BOND]
+        if bond["gap_pct"] >= 1 and has_world:
+            planned.append((CORE_BY_SLEEVE[SLEEVE_BOND], bond))
+    return planned
+
+
 async def generate_buy_picks(session: AsyncSession) -> list[Recommendation]:
     started = time.perf_counter()
-    snaps = await load_snapshots(session)
-    candidates = rank_candidates(snaps)
-    by_symbol = {s.symbol.upper(): s for s in snaps}
-    assets = {
-        a.symbol.upper(): a
-        for a in (await session.execute(select(Asset))).scalars().all()
+    pf = await get_primary_portfolio(session)
+    if pf is None:
+        return []
+    decorated = await decorate_portfolio(session, pf)
+    allocation = decorated["allocation"]
+    held = {
+        (p["asset"].symbol if hasattr(p["asset"], "symbol") else p["asset"]["symbol"]).upper()
+        for p in decorated["positions"]
     }
-    decided = _rule_picks(candidates, PICKS_LIMIT)
+    empty = len(held) == 0
+    planned = _plan_symbols(allocation, held)
     run_id = uuid4()
     recs: list[Recommendation] = []
-    for item in decided:
-        symbol = str(item["symbol"]).upper()
-        asset = assets.get(symbol)
-        snap = by_symbol.get(symbol)
-        if asset is None or snap is None:
+    cash_left = float(allocation["cash"])
+    equity = float(allocation["equity"])
+    max_single = float(allocation["max_single_position_pct"])
+
+    for symbol, gap in planned:
+        asset = await _ensure_core(session, symbol)
+        if asset is None:
             continue
+        meta = core_of(symbol) or {}
+        if asset.isin is None and meta.get("isin"):
+            asset.isin = meta["isin"]
         if not is_swiss_buyable(asset.symbol, asset.asset_class, asset.exchange):
             continue
+        quote = None
+        try:
+            quote = await get_quote(asset.symbol, session)
+        except Exception:
+            quote = None
+        price = float(quote.price) if quote else (float(asset.last_price) if asset.last_price else None)
+        is_core = meta.get("role") == "core"
+        size = size_order(
+            gap_value=float(gap["gap_value"]),
+            equity=equity,
+            cash=cash_left,
+            price=price,
+            is_core=is_core,
+            max_single=max_single,
+        )
+        if not size.get("qty"):
+            continue
+        cash_left -= float(size["amount"] or 0)
+        sleeve_label = gap["label"]
         rec = Recommendation(
             asset_id=asset.id,
             run_id=run_id,
             action=RecommendationAction.BUY,
-            confidence=_decimal(item.get("confidence")) or Decimal("0.52"),
-            risk_reward_ratio=_decimal(item.get("risk_reward_ratio")),
-            rationale=str(item["rationale"]),
+            confidence=Decimal("0.70") if symbol == STARTER_SYMBOL else Decimal("0.55"),
+            risk_reward_ratio=None,
+            rationale=gap_rationale(
+                symbol=symbol,
+                sleeve_label=sleeve_label,
+                gap=gap,
+                size=size,
+                currency=allocation["currency"],
+                price=price,
+                asset_ccy=asset.currency,
+                empty=empty,
+            ),
             news_summary=None,
-            news_sources=[{"title": h} for h in snap.headlines] or None,
-            technicals=snap.technicals or None,
-            proposed_qty=_decimal(item.get("proposed_qty")),
-            proposed_price=_decimal(item.get("proposed_price")),
+            news_sources=[{"title": n} for n in (meta.get("notes") or [])] or None,
+            technicals=None,
+            proposed_qty=_dec(size["qty"]),
+            proposed_price=_dec(size["price"]),
             status=RecommendationStatus.OPEN,
-            glossary_terms=["RSI", "SMA", "MACD"],
+            glossary_terms=["TER", "PRIIPs", "UCITS", "ISIN"],
+            suggested_symbols=list(meta.get("peers") or []),
         )
         session.add(rec)
         recs.append(rec)
@@ -292,7 +238,7 @@ async def generate_buy_picks(session: AsyncSession) -> list[Recommendation]:
             agent_name=AgentName.STRATEGIST,
             step=PICKS_STEP,
             status=AgentLogStatus.SUCCEEDED,
-            reasoning=f"{len(recs)} faktenbasierte Kaufregeln aus {len(candidates)} Kandidaten",
+            reasoning=f"{len(recs)} Lücken-Käufe, leer={empty}",
             output_payload={"symbols": [r.asset.symbol for r in recs if r.asset]},
             duration_ms=elapsed,
         )

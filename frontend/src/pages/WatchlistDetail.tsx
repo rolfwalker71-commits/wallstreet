@@ -4,7 +4,7 @@ import { PriceChart } from "@/components/charts/PriceChart";
 import { ActionChip } from "@/components/ui/ActionChip";
 import { SignedPct } from "@/components/ui/Signed";
 import { WatchlistButton } from "@/components/ui/WatchlistButton";
-import { api, type Asset, type Quote, type Recommendation, type Technicals } from "@/lib/api";
+import { api, type Asset, type Dossier, type Quote, type Recommendation, type Technicals } from "@/lib/api";
 import { CLASS_LABEL, money, number, pct, recAccentClass, signedClass, when } from "@/lib/format";
 import { panelClass, type Chrome } from "@/lib/platform";
 
@@ -19,6 +19,7 @@ export function WatchlistDetailPage() {
   const [rec, setRec] = useState<Recommendation | null>(null);
   const [tech, setTech] = useState<Technicals | null>(null);
   const [news, setNews] = useState<NewsRow[]>([]);
+  const [dossier, setDossier] = useState<Dossier | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -35,13 +36,15 @@ export function WatchlistDetailPage() {
         .catch(() => null),
       api.technicals(symbol).catch(() => null),
       api.news(symbol).catch(() => []),
+      api.dossier(symbol).catch(() => null),
     ])
-      .then(([a, q, r, t, n]) => {
+      .then(([a, q, r, t, n, d]) => {
         setAsset(a);
         setQuote(q);
         setRec(r);
         setTech(t);
         setNews(n);
+        setDossier(d);
       })
       .catch((e: Error) => setError(e.message));
   }, [symbol]);
@@ -88,6 +91,7 @@ export function WatchlistDetailPage() {
             </h2>
             <p className="text-sm text-muted-foreground">
               {CLASS_LABEL[asset.asset_class] ?? asset.asset_class}
+              {asset.isin ? ` · ${asset.isin}` : dossier?.isin ? ` · ${dossier.isin}` : ""}
               {asset.exchange ? ` · ${asset.exchange}` : ""}
               {asset.watched ? "" : " · Entdeckt"}
             </p>
@@ -175,6 +179,96 @@ export function WatchlistDetailPage() {
           </p>
         )}
       </section>
+
+      {dossier ? (
+        <section className={`${panelClass(chrome)} px-5 py-5`}>
+          <h3 className="text-lg font-semibold">Dossier</h3>
+          <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="text-muted-foreground">ISIN</dt>
+              <dd className="font-medium break-words">{dossier.isin ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">TER</dt>
+              <dd className="font-medium">{dossier.ter != null ? `${number(dossier.ter, 2)} %` : "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">KGV</dt>
+              <dd className="font-medium">{number(dossier.pe_ratio, 1)}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Dividendenrendite</dt>
+              <dd className="font-medium">
+                {dossier.dividend_yield != null ? `${number(dossier.dividend_yield, 2)} %` : "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Index</dt>
+              <dd className="font-medium break-words">{dossier.index_name ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Domizil / Ertrag</dt>
+              <dd className="font-medium break-words">
+                {[dossier.domicile, dossier.distribution].filter(Boolean).join(" · ") || "—"}
+              </dd>
+            </div>
+          </dl>
+          <p className="mt-3 text-sm text-muted-foreground">{dossier.broker_rule}</p>
+          {dossier.notes.length ? (
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+              {dossier.notes.map((n) => (
+                <li key={n}>{n}</li>
+              ))}
+            </ul>
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-3 text-sm">
+            {dossier.justetf_url ? (
+              <a className="text-primary underline-offset-2 hover:underline" href={dossier.justetf_url} target="_blank" rel="noreferrer">
+                JustETF / KID-Profil
+              </a>
+            ) : null}
+            {dossier.issuer_url ? (
+              <a className="text-primary underline-offset-2 hover:underline" href={dossier.issuer_url} target="_blank" rel="noreferrer">
+                Emittent
+              </a>
+            ) : null}
+            <a className="text-primary underline-offset-2 hover:underline" href={dossier.yahoo_url} target="_blank" rel="noreferrer">
+              Yahoo Finance
+            </a>
+          </div>
+          {dossier.calendar.length ? (
+            <div className="mt-4">
+              <h4 className="text-sm font-medium text-primary">Termine (Quelle genannt)</h4>
+              <ul className="mt-2 space-y-1 text-sm">
+                {dossier.calendar.map((c) => (
+                  <li key={`${c.kind}-${c.date}`}>
+                    {c.kind === "earnings" ? "Ergebnisse" : "Ex-Dividende"} · {c.date} · {c.source}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-muted-foreground">Keine gemeldeten Earnings-/Ex-Div-Daten in Yahoo.</p>
+          )}
+          {dossier.peers.length ? (
+            <div className="mt-4">
+              <h4 className="text-sm font-medium text-primary">Vergleich (gleiche Sleeve)</h4>
+              <ul className="mt-2 space-y-2 text-sm">
+                {dossier.peers.map((p) => (
+                  <li key={p.symbol}>
+                    <Link to={`/watchlist/${encodeURIComponent(p.symbol)}`} className="text-primary">
+                      {p.symbol}
+                    </Link>
+                    {p.isin ? ` · ${p.isin}` : ""}
+                    {p.ter != null ? ` · TER ${number(p.ter, 2)} %` : ""}
+                    {p.exchange ? ` · ${p.exchange}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className={`${panelClass(chrome)} px-5 py-5`}>
         <PriceChart symbol={asset.symbol} chrome={chrome} />

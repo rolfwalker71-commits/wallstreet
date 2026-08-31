@@ -7,6 +7,8 @@ from app.models import Asset
 from app.models.enums import AssetClass
 from app.schemas.common import AssetCreateIn, AssetOut, AssetWatchIn, Paginated
 from app.services.assets import AssetError, get_or_create_asset, set_watched
+from app.services.core_products import core_of
+from app.services.dossier import build_dossier, fetch_yahoo_facts, persist_isin
 
 router = APIRouter()
 
@@ -40,6 +42,25 @@ async def create_asset(
     await db.commit()
     await db.refresh(asset)
     return AssetOut.model_validate(asset)
+
+
+@router.get("/{symbol}/dossier")
+async def get_dossier(symbol: str, db: AsyncSession = Depends(get_db)) -> dict:
+    row = (
+        await db.execute(select(Asset).where(Asset.symbol == symbol.upper()))
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(404, "Titel nicht gefunden")
+    yahoo = fetch_yahoo_facts(row.symbol)
+    persist_isin(row, yahoo.get("isin") or (core_of(row.symbol) or {}).get("isin"))
+    extra = dict(row.extra or {})
+    for key in ("pe_ratio", "dividend_yield", "ter", "earnings_date", "ex_dividend_date"):
+        if yahoo.get(key) is not None:
+            extra[key] = yahoo[key]
+    row.extra = extra or None
+    await db.commit()
+    await db.refresh(row)
+    return build_dossier(row, yahoo)
 
 
 @router.get("/{symbol}", response_model=AssetOut)

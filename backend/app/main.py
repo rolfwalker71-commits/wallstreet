@@ -46,6 +46,20 @@ async def lifespan(_app: FastAPI):
             await conn.execute(
                 text(f"ALTER TYPE asset_class ADD VALUE IF NOT EXISTS '{value}'")
             )
+        for col, default in (
+            ("target_stock_pct", "60"),
+            ("target_bond_pct", "20"),
+            ("target_commodity_pct", "5"),
+            ("target_crypto_pct", "0"),
+            ("target_cash_pct", "15"),
+            ("max_single_position_pct", "5"),
+        ):
+            await conn.execute(
+                text(
+                    f"ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS {col} "
+                    f"NUMERIC(5, 2) NOT NULL DEFAULT {default}"
+                )
+            )
     async with async_session_factory() as session:
         await seed_if_empty(session)
         from app.services.vapid import ensure_vapid
