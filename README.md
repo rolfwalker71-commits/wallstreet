@@ -27,10 +27,17 @@ docker compose pull && docker compose up -d
 Öffnen: [http://localhost:4499](http://localhost:4499)  
 API-Docs: [http://localhost:4499/api/docs](http://localhost:4499/api/docs)
 
-`GHCR_OWNER` in `.env` auf deinen GitHub-User setzen. Images:
+`GHCR_OWNER` in `.env` ist der GitHub-User (hier `rolfwalker71-commits`). Images:
 
-- `ghcr.io/<owner>/wallstreet-frontend`
-- `ghcr.io/<owner>/wallstreet-backend`
+- `ghcr.io/rolfwalker71-commits/wallstreet-frontend`
+- `ghcr.io/rolfwalker71-commits/wallstreet-backend`
+
+GHCR-Pakete sind nach dem ersten Push privat. Auf dem Server entweder einloggen oder die Pakete unter GitHub → Packages auf **Public** stellen:
+
+```bash
+echo TOKEN | docker login ghcr.io -u rolfwalker71-commits --password-stdin
+# TOKEN: classic PAT mit read:packages
+```
 
 ## Lokale Entwicklung
 

@@ -4,7 +4,7 @@
 
 services:
   frontend:
-    image: ghcr.io/${GHCR_OWNER:-rolf}/wallstreet-frontend:${TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-rolfwalker71-commits}/wallstreet-frontend:${TAG:-latest}
     ports:
       - "${APP_PORT:-4499}:4499"
     depends_on:
@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
 
   backend:
-    image: ghcr.io/${GHCR_OWNER:-rolf}/wallstreet-backend:${TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER:-rolfwalker71-commits}/wallstreet-backend:${TAG:-latest}
     env_file:
       - .env
     environment:
