@@ -27,13 +27,12 @@ services:
     restart: unless-stopped
 
   db:
+    # Kein Host-Port: 5432/6379 bleiben intern, damit Paperless & Co. nicht kollidieren.
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-wallstreet}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wallstreet}
       POSTGRES_DB: ${POSTGRES_DB:-wallstreet}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -46,8 +45,6 @@ services:
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--save", "", "--appendonly", "no"]
-    ports:
-      - "6379:6379"
     restart: unless-stopped
 
 volumes:
