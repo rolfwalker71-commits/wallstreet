@@ -20,6 +20,8 @@ class QuoteOut(BaseModel):
     venue_label: str | None = None
     market_open: bool | None = None
     session_label: str | None = None
+    freshness_label: str | None = None
+    as_of_precision: str = "minute"
 
 
 class TechnicalsOut(BaseModel):

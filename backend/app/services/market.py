@@ -13,7 +13,14 @@ from app.models import Asset, AssetClass
 from app.schemas.market import HistoryOut, HistoryPoint, QuoteOut, TechnicalsOut
 from app.services.classify import COINGECKO_IDS, infer_asset_class
 from app.services.indicators import compute_technicals
-from app.services.session import bar_as_of, session_info
+from app.services.session import (
+    VENUES,
+    bar_as_of,
+    looks_like_daily_midnight,
+    session_close_as_of,
+    session_info,
+    venue_key,
+)
 
 CRYPTO_VS = "usd"
 
@@ -50,21 +57,40 @@ async def fetch_coingecko_quote(coingecko_id: str, symbol: str) -> QuoteOut | No
 
 
 def fetch_yfinance_quote(symbol: str) -> QuoteOut | None:
+    ticker = yf.Ticker(symbol)
     try:
-        hist = yf.Ticker(symbol).history(period="5d", auto_adjust=True)
+        daily = ticker.history(period="5d", interval="1d", auto_adjust=True)
     except Exception:
+        daily = None
+    if daily is None or daily.empty:
         return None
-    if hist is None or hist.empty:
+    daily_close = daily["Close"].dropna()
+    if daily_close.empty:
         return None
-    close = hist["Close"].dropna()
-    if close.empty:
-        return None
-    price = float(close.iloc[-1])
-    prev = float(close.iloc[-2]) if len(close) > 1 else None
-    change = ((price - prev) / prev * 100) if prev else None
+    price = float(daily_close.iloc[-1])
+    prev = float(daily_close.iloc[-2]) if len(daily_close) > 1 else None
+    as_of = bar_as_of(daily_close.index[-1])
+    precision = "day"
     volume = None
-    if "Volume" in hist.columns and not hist["Volume"].dropna().empty:
-        volume = float(hist["Volume"].dropna().iloc[-1])
+    if "Volume" in daily.columns and not daily["Volume"].dropna().empty:
+        volume = float(daily["Volume"].dropna().iloc[-1])
+
+    guess = session_info(symbol, _infer_class(symbol))
+    if guess.market_open:
+        try:
+            intra = ticker.history(period="1d", interval="5m", auto_adjust=True)
+        except Exception:
+            intra = None
+        if intra is not None and not intra.empty:
+            intra_close = intra["Close"].dropna()
+            if not intra_close.empty:
+                price = float(intra_close.iloc[-1])
+                as_of = bar_as_of(intra_close.index[-1])
+                precision = "minute"
+                if "Volume" in intra.columns and not intra["Volume"].dropna().empty:
+                    volume = float(intra["Volume"].dropna().iloc[-1])
+
+    change = ((price - prev) / prev * 100) if prev else None
     return QuoteOut(
         symbol=symbol,
         name=symbol,
@@ -72,10 +98,11 @@ def fetch_yfinance_quote(symbol: str) -> QuoteOut | None:
         price=Decimal(str(round(price, 6))),
         change_pct=change,
         currency="USD",
-        as_of=bar_as_of(close.index[-1]),
+        as_of=as_of,
         volume=volume,
         delayed=True,
         source="Yahoo Finance",
+        as_of_precision=precision,
     )
 
 
@@ -100,14 +127,31 @@ async def get_quote(symbol: str, session: AsyncSession | None = None) -> QuoteOu
             quote = None
     if quote is None:
         return None
-    info = session_info(quote.symbol, quote.asset_class, asset.exchange if asset else None)
+    precision = quote.as_of_precision or "minute"
+    as_of = quote.as_of
+    is_crypto = quote.asset_class == AssetClass.CRYPTO or quote.symbol.upper().endswith("-USD")
+    if not is_crypto:
+        key = venue_key(quote.symbol, asset.exchange if asset else None)
+        tz_name = VENUES[key][1]
+        if precision == "day" and looks_like_daily_midnight(as_of, tz_name):
+            as_of = session_close_as_of(as_of, key)
+    info = session_info(
+        quote.symbol,
+        quote.asset_class,
+        asset.exchange if asset else None,
+        last_print=as_of,
+        as_of_precision=precision,
+    )
     return quote.model_copy(
         update={
+            "as_of": as_of,
             "delayed": info.delayed,
             "source": info.source,
             "venue_label": info.venue_label,
             "market_open": info.market_open,
             "session_label": info.session_label,
+            "freshness_label": info.freshness_label,
+            "as_of_precision": info.as_of_precision,
         }
     )
 

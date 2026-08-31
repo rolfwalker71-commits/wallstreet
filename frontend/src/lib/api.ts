@@ -135,6 +135,8 @@ export interface Position {
   delayed: boolean | null;
   market_open: boolean | null;
   session_label: string | null;
+  freshness_label: string | null;
+  as_of_precision: string | null;
 }
 
 export interface Portfolio {
@@ -199,6 +201,8 @@ export interface Quote {
   venue_label?: string | null;
   market_open?: boolean | null;
   session_label?: string | null;
+  freshness_label?: string | null;
+  as_of_precision?: string | null;
 }
 
 export interface HistoryPoint {

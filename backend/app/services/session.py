@@ -38,6 +38,8 @@ class SessionInfo:
     session_label: str
     delayed: bool
     source: str
+    freshness_label: str
+    as_of_precision: str = "minute"
 
 
 def venue_key(symbol: str, exchange: str | None = None) -> str:
@@ -61,6 +63,8 @@ def session_info(
     asset_class: AssetClass | str | None = None,
     exchange: str | None = None,
     now: datetime | None = None,
+    last_print: datetime | None = None,
+    as_of_precision: str = "minute",
 ) -> SessionInfo:
     cls = asset_class.value if isinstance(asset_class, AssetClass) else (asset_class or "")
     if cls == "crypto" or (symbol or "").upper().endswith("-USD"):
@@ -70,19 +74,37 @@ def session_info(
             session_label="24h offen",
             delayed=False,
             source="CoinGecko",
+            freshness_label="nahezu aktuell",
+            as_of_precision="minute",
         )
     key = venue_key(symbol, exchange)
     label, tz_name, open_t, close_t = VENUES[key]
-    local = (now or datetime.now(UTC)).astimezone(ZoneInfo(tz_name))
+    tz = ZoneInfo(tz_name)
+    local = (now or datetime.now(UTC)).astimezone(tz)
     weekday = local.weekday() < 5
     clock = local.timetz().replace(tzinfo=None)
     is_open = weekday and open_t <= clock < close_t
+    if last_print is not None:
+        last_local = last_print.astimezone(tz)
+        if last_local.date() < local.date():
+            is_open = False
+            session_label = "kein Kurs von heute"
+        else:
+            session_label = "Handel läuft" if is_open else "Börse geschlossen"
+    else:
+        session_label = "Handel läuft" if is_open else "Börse geschlossen"
+    if as_of_precision == "day":
+        freshness = "letzter Schluss" if not is_open else "Tageskurs"
+    else:
+        freshness = "verzögert" if is_open else "letzter Schluss"
     return SessionInfo(
         venue_label=label,
         market_open=is_open,
-        session_label="Handel läuft" if is_open else "Börse geschlossen",
+        session_label=session_label,
         delayed=True,
         source="Yahoo Finance",
+        freshness_label=freshness,
+        as_of_precision=as_of_precision,
     )
 
 
@@ -93,3 +115,15 @@ def bar_as_of(index_value) -> datetime:
     if ts.tzinfo is None:
         return ts.replace(tzinfo=UTC)
     return ts.astimezone(UTC)
+
+
+def looks_like_daily_midnight(ts: datetime, tz_name: str) -> bool:
+    local = ts.astimezone(ZoneInfo(tz_name))
+    return local.hour == 0 and local.minute == 0
+
+
+def session_close_as_of(ts: datetime, key: str) -> datetime:
+    _label, tz_name, _open, close_t = VENUES[key]
+    tz = ZoneInfo(tz_name)
+    local = ts.astimezone(tz)
+    return datetime.combine(local.date(), close_t, tzinfo=tz).astimezone(UTC)

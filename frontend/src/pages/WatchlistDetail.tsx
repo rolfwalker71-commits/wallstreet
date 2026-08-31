@@ -122,6 +122,8 @@ export function WatchlistDetailPage() {
             sessionLabel={quote?.session_label}
             marketOpen={quote?.market_open}
             venueLabel={quote?.venue_label}
+            freshnessLabel={quote?.freshness_label}
+            asOfPrecision={quote?.as_of_precision}
           />
         </div>
         {asset.notes ? (

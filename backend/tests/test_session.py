@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from app.models.enums import AssetClass
-from app.services.session import session_info, venue_key
+from app.services.session import session_close_as_of, session_info, venue_key
 
 
 def test_venue_from_suffix() -> None:
@@ -23,3 +23,18 @@ def test_us_closed_on_sunday() -> None:
     assert info.delayed is True
     assert info.market_open is False
     assert "geschlossen" in info.session_label
+    assert info.freshness_label == "letzter Schluss"
+
+
+def test_stale_print_is_not_today() -> None:
+    now = datetime(2026, 8, 31, 12, 0, tzinfo=UTC)
+    last = datetime(2026, 8, 27, 15, 30, tzinfo=UTC)
+    info = session_info("VWCE.L", AssetClass.ETF, now=now, last_print=last)
+    assert info.market_open is False
+    assert info.session_label == "kein Kurs von heute"
+
+
+def test_daily_midnight_maps_to_session_close() -> None:
+    midnight = datetime(2026, 8, 28, 4, 0, tzinfo=UTC)
+    close = session_close_as_of(midnight, "US")
+    assert close.astimezone(UTC).hour == 20

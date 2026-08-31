@@ -171,6 +171,8 @@ export function MarketsPage() {
                       sessionLabel={quotes[a.symbol]?.session_label}
                       marketOpen={quotes[a.symbol]?.market_open}
                       venueLabel={quotes[a.symbol]?.venue_label}
+                      freshnessLabel={quotes[a.symbol]?.freshness_label}
+                      asOfPrecision={quotes[a.symbol]?.as_of_precision}
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -234,6 +236,8 @@ export function MarketsPage() {
                   sessionLabel={quotes[a.symbol]?.session_label}
                   marketOpen={quotes[a.symbol]?.market_open}
                   venueLabel={quotes[a.symbol]?.venue_label}
+                  freshnessLabel={quotes[a.symbol]?.freshness_label}
+                  asOfPrecision={quotes[a.symbol]?.as_of_precision}
                 />
                 <div className="mt-1">
                   <QuoteChange value={change} />

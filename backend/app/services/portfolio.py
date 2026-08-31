@@ -202,6 +202,8 @@ async def decorate_portfolio(session: AsyncSession, portfolio: Portfolio) -> dic
                 "delayed": quote.delayed if quote else None,
                 "market_open": quote.market_open if quote else None,
                 "session_label": quote.session_label if quote else None,
+                "freshness_label": quote.freshness_label if quote else None,
+                "as_of_precision": quote.as_of_precision if quote else None,
             }
         )
 

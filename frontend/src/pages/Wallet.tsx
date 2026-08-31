@@ -327,6 +327,8 @@ export function WalletPage() {
                   delayed={p.delayed}
                   sessionLabel={p.session_label}
                   marketOpen={p.market_open}
+                  freshnessLabel={p.freshness_label}
+                  asOfPrecision={p.as_of_precision}
                 />
                 <PositionSinceChart
                   symbol={p.asset.symbol}

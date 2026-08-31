@@ -23,6 +23,8 @@ class PositionOut(ORMModel):
     delayed: bool | None = None
     market_open: bool | None = None
     session_label: str | None = None
+    freshness_label: str | None = None
+    as_of_precision: str | None = None
 
 
 class TransactionOut(ORMModel):
