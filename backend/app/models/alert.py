@@ -26,7 +26,12 @@ class PriceAlert(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     kind: Mapped[AlertKind] = mapped_column(
-        Enum(AlertKind, name="alert_kind", native_enum=True),
+        Enum(
+            AlertKind,
+            name="alert_kind",
+            native_enum=True,
+            values_callable=lambda members: [item.value for item in members],
+        ),
         index=True,
     )
     threshold: Mapped[Decimal] = mapped_column(Numeric(20, 8))

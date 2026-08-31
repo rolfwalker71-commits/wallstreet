@@ -1,6 +1,9 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
+
+from pydantic import field_validator
 
 from app.models.enums import (
     AgentLogStatus,
@@ -42,3 +45,12 @@ class RecommendationOut(ORMModel):
     asset: AssetOut
     agent_logs: list[AgentLogOut] = []
     outcome: dict | None = None
+
+    @field_validator("outcome", mode="before")
+    @classmethod
+    def _outcome_as_dict(cls, value: Any) -> dict | None:
+        if value is None or isinstance(value, dict):
+            return value
+        from app.services.outcomes import outcome_to_dict
+
+        return outcome_to_dict(value)

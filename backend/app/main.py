@@ -18,69 +18,75 @@ from app.models import *  # noqa: F401,F403
 logger = logging.getLogger("wallstreet")
 
 
+_SCHEMA_STATEMENTS = (
+    "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS realized_pnl NUMERIC(20, 8)",
+    "ALTER TABLE assets ADD COLUMN IF NOT EXISTS watched BOOLEAN NOT NULL DEFAULT TRUE",
+    "ALTER TABLE assets ADD COLUMN IF NOT EXISTS user_note TEXT",
+    "ALTER TABLE recommendations ADD COLUMN IF NOT EXISTS suggested_symbols JSONB",
+    "ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS target_stock_pct NUMERIC(5, 2) NOT NULL DEFAULT 60",
+    "ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS target_bond_pct NUMERIC(5, 2) NOT NULL DEFAULT 20",
+    "ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS target_commodity_pct NUMERIC(5, 2) NOT NULL DEFAULT 5",
+    "ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS target_crypto_pct NUMERIC(5, 2) NOT NULL DEFAULT 0",
+    "ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS target_cash_pct NUMERIC(5, 2) NOT NULL DEFAULT 15",
+    "ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS max_single_position_pct NUMERIC(5, 2) NOT NULL DEFAULT 5",
+)
+
+
+async def _prepare_schema(conn) -> None:
+    await conn.execute(
+        text(
+            "DO $$ BEGIN "
+            "CREATE TYPE alert_kind AS ENUM ('below', 'above', 'pct_today'); "
+            "EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
+        )
+    )
+    try:
+        await conn.run_sync(Base.metadata.create_all)
+    except Exception:
+        logger.exception("create_all übersprungen")
+    for value in ("FUND", "COMMODITY", "FOREX"):
+        try:
+            await conn.execute(text(f"ALTER TYPE asset_class ADD VALUE IF NOT EXISTS '{value}'"))
+        except Exception:
+            logger.exception("asset_class %s", value)
+    for stmt in _SCHEMA_STATEMENTS:
+        try:
+            await conn.execute(text(stmt))
+        except Exception:
+            logger.exception("Schema: %s", stmt)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     settings = get_settings()
     logging.basicConfig(level=settings.log_level.upper())
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.execute(
-            text(
-                "ALTER TABLE transactions "
-                "ADD COLUMN IF NOT EXISTS realized_pnl NUMERIC(20, 8)"
-            )
-        )
-        await conn.execute(
-            text(
-                "ALTER TABLE assets "
-                "ADD COLUMN IF NOT EXISTS watched BOOLEAN NOT NULL DEFAULT TRUE"
-            )
-        )
-        await conn.execute(
-            text(
-                "ALTER TABLE recommendations "
-                "ADD COLUMN IF NOT EXISTS suggested_symbols JSONB"
-            )
-        )
-        for value in ("FUND", "COMMODITY", "FOREX"):
-            await conn.execute(
-                text(f"ALTER TYPE asset_class ADD VALUE IF NOT EXISTS '{value}'")
-            )
-        for col, default in (
-            ("target_stock_pct", "60"),
-            ("target_bond_pct", "20"),
-            ("target_commodity_pct", "5"),
-            ("target_crypto_pct", "0"),
-            ("target_cash_pct", "15"),
-            ("max_single_position_pct", "5"),
-        ):
-            await conn.execute(
-                text(
-                    f"ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS {col} "
-                    f"NUMERIC(5, 2) NOT NULL DEFAULT {default}"
-                )
-            )
-        await conn.execute(text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS user_note TEXT"))
-        await conn.execute(
-            text(
-                "DO $$ BEGIN "
-                "CREATE TYPE alert_kind AS ENUM ('below', 'above', 'pct_today'); "
-                "EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
-            )
-        )
-    async with async_session_factory() as session:
-        await seed_if_empty(session)
-        from app.services.vapid import ensure_vapid
+    try:
+        async with engine.begin() as conn:
+            await _prepare_schema(conn)
+    except Exception:
+        logger.exception("Schema-Migration fehlgeschlagen — API startet trotzdem")
 
-        await ensure_vapid(session, subject=settings.vapid_subject)
-        from app.agents.llm import set_mini_only
-        from app.jobs.scheduler import reschedule_agent
-        from app.services.prefs import get_prefs
+    from app.agents.llm import set_mini_only
+    from app.jobs.scheduler import reschedule_agent
+    from app.services.prefs import AppPrefs, get_prefs
+    from app.services.vapid import ensure_vapid
 
-        prefs = await get_prefs(session)
-        set_mini_only(prefs.agent_mini_only)
-    start_scheduler()
-    reschedule_agent(prefs.agent_interval_minutes)
+    prefs = AppPrefs()
+    try:
+        async with async_session_factory() as session:
+            await seed_if_empty(session)
+            await ensure_vapid(session, subject=settings.vapid_subject)
+            prefs = await get_prefs(session)
+            set_mini_only(prefs.agent_mini_only)
+            await session.commit()
+    except Exception:
+        logger.exception("Seed/Prefs fehlgeschlagen — API startet trotzdem")
+
+    try:
+        start_scheduler()
+        reschedule_agent(prefs.agent_interval_minutes)
+    except Exception:
+        logger.exception("Scheduler nicht gestartet")
     logger.info(
         "Wallstreet API bereit (v%s, LLM %s)",
         __version__,

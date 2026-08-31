@@ -228,22 +228,43 @@ export interface Technicals {
   last_close: number | null;
 }
 
+function errorFromBody(text: string, status: number, statusText: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return new Error(statusText || `HTTP ${status}`);
+  if (trimmed.startsWith("<") || trimmed.includes("<html")) {
+    return new Error(
+      status >= 500
+        ? `API nicht erreichbar (${status}). Backend prüfen.`
+        : "API hat HTML statt JSON geliefert.",
+    );
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as { detail?: unknown };
+    if (typeof parsed.detail === "string") return new Error(parsed.detail);
+  } catch {
+    return new Error(trimmed.slice(0, 180));
+  }
+  return new Error(trimmed.slice(0, 180) || statusText);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
     ...init,
   });
+  const text = await res.text();
   if (!res.ok) {
-    const text = await res.text();
-    try {
-      const parsed = JSON.parse(text) as { detail?: unknown };
-      if (typeof parsed.detail === "string") throw new Error(parsed.detail);
-    } catch (err) {
-      if (err instanceof Error && err.message !== text) throw err;
-    }
-    throw new Error(text || res.statusText);
+    throw errorFromBody(text, res.status, res.statusText);
   }
-  return res.json() as Promise<T>;
+  if (!text) return undefined as T;
+  if (text.trim().startsWith("<") || text.includes("<html")) {
+    throw new Error("API hat HTML statt JSON geliefert. Backend oder Proxy prüfen.");
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw errorFromBody(text, res.status, res.statusText);
+  }
 }
 
 export const api = {

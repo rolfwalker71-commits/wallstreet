@@ -53,28 +53,37 @@ async def list_recommendations(
     limit: int = Query(default=80, le=200),
     db: AsyncSession = Depends(get_db),
 ) -> list[RecommendationOut]:
-    stmt = (
-        select(Recommendation)
-        .join(Asset)
-        .options(
+    def _stmt(*, with_outcome: bool):
+        opts = [
             selectinload(Recommendation.asset),
             selectinload(Recommendation.agent_logs),
-            selectinload(Recommendation.outcome),
+        ]
+        if with_outcome:
+            opts.append(selectinload(Recommendation.outcome))
+        q = (
+            select(Recommendation)
+            .join(Asset)
+            .options(*opts)
+            .order_by(Recommendation.created_at.desc())
+            .limit(200 if latest else limit)
         )
-        .order_by(Recommendation.created_at.desc())
-        .limit(200 if latest else limit)
-    )
-    if action:
-        stmt = stmt.where(Recommendation.action == action)
-    if status:
-        stmt = stmt.where(Recommendation.status == status)
-    if watched is not None:
-        stmt = stmt.where(Asset.watched.is_(watched))
-    if asset_class:
-        stmt = stmt.where(Asset.asset_class == asset_class)
-    if symbol:
-        stmt = stmt.where(Asset.symbol == symbol.upper())
-    rows = (await db.execute(stmt)).scalars().all()
+        if action:
+            q = q.where(Recommendation.action == action)
+        if status:
+            q = q.where(Recommendation.status == status)
+        if watched is not None:
+            q = q.where(Asset.watched.is_(watched))
+        if asset_class:
+            q = q.where(Asset.asset_class == asset_class)
+        if symbol:
+            q = q.where(Asset.symbol == symbol.upper())
+        return q
+
+    try:
+        rows = (await db.execute(_stmt(with_outcome=True))).scalars().all()
+    except Exception:
+        await db.rollback()
+        rows = (await db.execute(_stmt(with_outcome=False))).scalars().all()
     rows = [
         row
         for row in rows
