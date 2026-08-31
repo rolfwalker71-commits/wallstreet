@@ -11,7 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { ChartRangeTabs } from "@/components/charts/ChartRangeTabs";
-import { PeakDateLabel, PeakDot } from "@/components/charts/PeakDateLabel";
+import { PeakDateLabel, PeakDot, peakCaption } from "@/components/charts/PeakDateLabel";
 import {
   isIntradayPeriod,
   peakIndices,
@@ -19,7 +19,7 @@ import {
   type ChartPeriodId,
 } from "@/components/charts/periods";
 import { api, type HistoryPoint } from "@/lib/api";
-import { date, dateShort, number, time } from "@/lib/format";
+import { date, number, time } from "@/lib/format";
 import { type Chrome } from "@/lib/platform";
 
 export function PriceChart({
@@ -55,7 +55,7 @@ export function PriceChart({
   const data = points.map((p, i) => ({
     ...p,
     label: axisLabel(p.date),
-    peakLabel: peaks.has(i) ? dateShort(p.date) : "",
+    peakLabel: peaks.has(i) ? peakCaption(p.date, p.close) : "",
   }));
   const rising = data.length >= 2 && data[data.length - 1].close >= data[0].close;
   const closeColor = rising ? "rgb(var(--gain))" : "rgb(var(--loss))";
@@ -82,7 +82,7 @@ export function PriceChart({
       {data.length >= 2 ? (
         <div className={chrome === "desktop" ? "h-72" : "h-56"}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: showPeakDates(period) ? 22 : 8, right: 12, left: 0, bottom: 0 }}>
+            <LineChart data={data} margin={{ top: showPeakDates(period) ? 36 : 8, right: 12, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="rgb(var(--border))" strokeDasharray="3 3" />
               <XAxis
                 dataKey="label"

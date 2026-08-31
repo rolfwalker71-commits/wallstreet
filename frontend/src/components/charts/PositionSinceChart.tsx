@@ -11,11 +11,11 @@ import {
   YAxis,
 } from "recharts";
 import { ChartRangeTabs } from "@/components/charts/ChartRangeTabs";
-import { PeakDateLabel, PeakDot } from "@/components/charts/PeakDateLabel";
+import { PeakDateLabel, PeakDot, peakCaption } from "@/components/charts/PeakDateLabel";
 import { peakIndices, showPeakDates, type ChartPeriodId } from "@/components/charts/periods";
 import { api, type HistoryPoint } from "@/lib/api";
 import { SignedMoney } from "@/components/ui/Signed";
-import { date, dateShort, money, number, time } from "@/lib/format";
+import { date, money, number, time } from "@/lib/format";
 import { type Chrome } from "@/lib/platform";
 
 export function PositionSinceChart({
@@ -64,7 +64,7 @@ export function PositionSinceChart({
   const data = points.map((p, i) => ({
     ...p,
     label: axisLabel(p.date),
-    peakLabel: peaks.has(i) ? dateShort(p.date) : "",
+    peakLabel: peaks.has(i) ? peakCaption(p.date, p.close) : "",
     value: p.close * quantity,
     pnl: (p.close - avgCost) * quantity,
   }));
@@ -93,7 +93,7 @@ export function PositionSinceChart({
       {data.length >= 2 ? (
         <div className={chrome === "desktop" ? "mt-2 h-56" : "mt-2 h-48"}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: showPeakDates(period) ? 22 : 8, right: 12, left: 0, bottom: 0 }}>
+            <LineChart data={data} margin={{ top: showPeakDates(period) ? 36 : 8, right: 12, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="rgb(var(--border))" strokeDasharray="3 3" />
               <XAxis
                 dataKey="label"
