@@ -103,21 +103,25 @@ async def cached_picks(session: AsyncSession) -> list[Recommendation] | None:
         created = created.replace(tzinfo=UTC)
     if datetime.now(UTC) - created > PICKS_TTL:
         return None
-    rows = (
-        (
-            await session.execute(
-                select(Recommendation)
-                .options(
-                    selectinload(Recommendation.asset),
-                    selectinload(Recommendation.agent_logs),
-                )
-                .where(Recommendation.run_id == log.run_id)
-                .order_by(Recommendation.created_at.asc())
-            )
+    def _query(*, with_outcome: bool):
+        opts = [
+            selectinload(Recommendation.asset),
+            selectinload(Recommendation.agent_logs),
+        ]
+        if with_outcome:
+            opts.append(selectinload(Recommendation.outcome))
+        return (
+            select(Recommendation)
+            .options(*opts)
+            .where(Recommendation.run_id == log.run_id)
+            .order_by(Recommendation.created_at.asc())
         )
-        .scalars()
-        .all()
-    )
+
+    try:
+        rows = (await session.execute(_query(with_outcome=True))).scalars().all()
+    except Exception:
+        await session.rollback()
+        rows = (await session.execute(_query(with_outcome=False))).scalars().all()
     return list(rows) or None
 
 
