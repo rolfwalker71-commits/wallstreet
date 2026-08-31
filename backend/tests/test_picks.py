@@ -1,4 +1,4 @@
-from app.services.picks import AssetSnapshot, buy_score, heuristic_rationale, rank_candidates
+from app.services.picks import AssetSnapshot, buy_score, fact_rationale, rank_candidates
 
 
 def _snap(**kwargs) -> AssetSnapshot:
@@ -13,8 +13,7 @@ def _snap(**kwargs) -> AssetSnapshot:
         currency="CHF",
         last_action="hold",
         last_confidence=0.65,
-        last_rationale="Halten.",
-        news_summary=None,
+        headlines=(),
         technicals={"rsi_14": 38, "sma_20": 80, "sma_50": 79, "macd": 0.2, "macd_signal": 0.1, "last_close": 78.6},
     )
     base.update(kwargs)
@@ -42,6 +41,7 @@ def test_oversold_buy_outranks_overbought_sell() -> None:
     assert buy_score(dip) > buy_score(hot)
     ranked = rank_candidates([hot, dip])
     assert ranked[0].symbol == "AAPL"
+    assert all(s.last_action != "sell" for s in ranked)
 
 
 def test_prior_buy_gets_a_boost() -> None:
@@ -50,8 +50,12 @@ def test_prior_buy_gets_a_boost() -> None:
     assert buy_score(fresh) > buy_score(hold)
 
 
-def test_heuristic_rationale_is_a_real_buy_case() -> None:
-    text = heuristic_rationale(_snap())
-    assert "Kauf jetzt" in text
+def test_fact_rationale_lists_numbers_not_a_story() -> None:
+    text = fact_rationale(_snap(headlines=("Nestlé raises prices",)))
     assert "NESN.SW" in text
-    assert "Risiko" in text
+    assert "RSI-14: 38.0" in text
+    assert "Nestlé raises prices" in text
+    assert "könnte" not in text.lower()
+    assert "These" not in text
+    assert "klarer Einstieg" not in text
+    assert "weil RSI-14=38.0 ≤ 32" not in text

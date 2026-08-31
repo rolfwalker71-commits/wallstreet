@@ -90,8 +90,8 @@ export function SignalsPage() {
           <h2 className="text-2xl font-semibold leading-snug tracking-tight">Signale</h2>
           <p className="text-sm text-muted-foreground">
             {llm.on
-              ? `LLM aktiv: Strategist ${llm.model}${llm.mini ? `, Mini ${llm.mini}` : ""}. Watchlist plus Ideen aus den News.`
-              : "Ohne OpenAI-Key läuft nur die Heuristik. Key gehört in die .env im Projektroot."}
+              ? `Modelle ${llm.model}${llm.mini ? ` / ${llm.mini}` : ""} nur zum Lesen von Schlagzeilen. Kauf, Halten, Verkauf kommt aus RSI-Regeln. Texte sind Zahlen und wörtliche Headlines.`
+              : "Ohne OpenAI-Key: nur RSI-Regeln und gespeicherte Kurse. Key gehört in die .env im Projektroot."}
           </p>
         </div>
         <button

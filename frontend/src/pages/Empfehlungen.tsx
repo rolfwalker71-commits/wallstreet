@@ -55,11 +55,10 @@ export function EmpfehlungenPage() {
           <div className="mb-1.5 h-1.5 w-14 rounded-full bg-gain" />
           <h2 className="text-2xl font-semibold leading-snug tracking-tight">Empfehlungen</h2>
           <p className="text-sm text-muted-foreground">
-            Bis zu zehn klare Kaufideen jetzt — aus Watchlist, entdeckten Titeln und den letzten
-            Agentenläufen. Nur Papiere, die ein Schweizer Privatanleger typischerweise kaufen kann
-            (Aktien, UCITS-ETFs, Obligationen, Fonds, EU-Rohstoffprodukte, Crypto). US-ETFs ohne
-            KID, Devisen und Futures sind ausgeblendet. Optionen und Hebel nur, wenn sie hier
-            getrackt und in der EU/CH handelbar sind.
+            Bis zu zehn Käufe nach festem Regelwerk (gemessene Kurse und Indikatoren). Texte nennen
+            nur Zahlen und wörtliche Schlagzeilen — keine Prognose, keine erfundenen News. Nur
+            Papiere, die ein Schweizer Privatanleger typischerweise kaufen kann. US-ETFs ohne KID,
+            Devisen und Futures sind ausgeblendet.
           </p>
         </div>
         <button
@@ -121,7 +120,7 @@ export function EmpfehlungenPage() {
                   Idee: {rec.asset.notes}
                 </p>
               ) : null}
-              <p className="mt-3 text-sm font-medium text-primary">Warum jetzt kaufen</p>
+              <p className="mt-3 text-sm font-medium text-primary">Fakten</p>
               <p className="mt-1 text-sm leading-relaxed text-foreground">{rec.rationale}</p>
               <p className="mt-2 text-sm text-muted-foreground">
                 Konfidenz {pct(Number(rec.confidence) * 100)}

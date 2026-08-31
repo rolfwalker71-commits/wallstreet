@@ -13,15 +13,15 @@ from app.services.assets import AssetError, get_or_create_asset
 from app.services.news import fetch_rss
 from app.services.swiss_tradable import is_swiss_buyable
 
-DISCOVER_SYSTEM = """Du bist Ideen-Scout für ein privates Depot in der Schweiz.
-Lies die Headlines und nenne 4-6 Ideen AUSSERHALB der Watchlist, die ein CH-Privatanleger kaufen kann.
-Erlaubt: Einzelaktien (auch US), UCITS-ETFs, SIX-Titel (.SW), Xetra/LSE-UCITS (.DE / .L), Crypto (BTC-USD, ETH-USD).
-Verboten: US-ETFs (VOO, SPY, TLT, GLD), US-Mutual-Funds (VTSAX), Devisenpaare (=X), Futures (=F).
-Nur Ticker, die in den Meldungen wirklich vorkommen oder klar gemeint sind.
+DISCOVER_SYSTEM = """Du listest nur Ticker, die wörtlich in den Headlines stehen.
+Keine Interpretation, keine erfundenen Ticker, keine Begründung aus Wissen.
+
+Erlaubt: Einzelaktien (auch US), UCITS-ETFs, SIX (.SW), Xetra/LSE-UCITS (.DE / .L), Crypto (BTC-USD, ETH-USD).
+Verboten: US-ETFs ohne KID (VOO, SPY, TLT, GLD), US-Funds (VTSAX), Devisen (=X), Futures (=F).
 
 JSON-Array:
-[{"symbol":"NESN.SW","reason":"2-3 Sätze: warum genau jetzt eine Analyse lohnt"}]
-Keine Watchlist-Duplikate. Keine erfundenen Ticker."""
+[{"symbol":"NESN.SW","headline":"exakte Schlagzeile aus der Liste"}]
+Die headline MUSS eine der gelieferten Headlines sein. Sonst weglassen."""
 
 NAME_HINTS = {
     "tesla": "TSLA",
@@ -76,10 +76,12 @@ async def discover_ideas(
     ).scalars().all()
     watched = {a.symbol.upper() for a in watched_rows}
     news = fetch_rss()
+    titles = {n.title.strip() for n in news if n.title}
     blob = "\n".join(f"- {n.title}" for n in news[:30])
     reasons: dict[str, str] = {}
-    for sym in _from_headlines(blob, watched):
-        reasons[sym] = f"Kommt in aktuellen Headlines vor."
+    for item in news[:30]:
+        for sym in _from_headlines(item.title, watched):
+            reasons.setdefault(sym, f"Headline: {item.title}")
 
     llm = get_llm(mini=True)
     if llm:
@@ -97,10 +99,17 @@ async def discover_ideas(
             match = re.search(r"\[.*\]", str(msg.content), re.S)
             parsed = json.loads(match.group(0) if match else str(msg.content))
             for item in parsed:
+                if not isinstance(item, dict):
+                    continue
                 sym = str(item.get("symbol") or "").upper()
-                reason = str(item.get("reason") or "").strip()
-                if sym and sym not in watched and is_swiss_buyable(sym):
-                    reasons[sym] = reason or reasons.get(sym, "Aus News-Scan.")
+                headline = str(item.get("headline") or item.get("reason") or "").strip()
+                if not sym or sym in watched or not is_swiss_buyable(sym):
+                    continue
+                if headline not in titles:
+                    continue
+                if not _from_headlines(headline, set()):
+                    continue
+                reasons.setdefault(sym, f"Headline: {headline}")
         except Exception:
             pass
 

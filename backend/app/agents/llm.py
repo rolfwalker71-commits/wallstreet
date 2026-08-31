@@ -12,7 +12,7 @@ def get_llm(mini: bool = False) -> ChatOpenAI | None:
     return ChatOpenAI(
         model=model,
         api_key=settings.openai_api_key,
-        temperature=0.2,
+        temperature=0,
     )
 
 
