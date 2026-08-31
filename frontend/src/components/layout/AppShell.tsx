@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
+  BadgeCheck,
+  Bell,
   BookOpen,
   Bot,
   CandlestickChart,
@@ -19,6 +21,7 @@ import {
 } from "@/lib/platform";
 
 const NAV = [
+  { to: "/empfehlungen", label: "Empfehlungen", icon: BadgeCheck },
   { to: "/", label: "Signale", icon: Radar },
   { to: "/watchlist", label: "Watchlist", icon: CandlestickChart },
   { to: "/wallet", label: "Depot", icon: Wallet },
@@ -61,14 +64,23 @@ export function AppShell() {
       {chrome === "desktop" ? (
         <header className="mica sticky top-0 z-30 flex items-center justify-between border-b border-border px-4 py-2">
           <span className="text-lg font-semibold tracking-tight text-primary">Wallstreet</span>
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm hover:bg-muted"
-            aria-label="Design umschalten"
-          >
-            {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
-          </button>
+          <div className="flex items-center gap-1">
+            <NavLink
+              to="/agents"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm hover:bg-muted"
+            >
+              <Bell className="size-4" aria-hidden />
+              Hinweise
+            </NavLink>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm hover:bg-muted"
+              aria-label="Design umschalten"
+            >
+              {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            </button>
+          </div>
         </header>
       ) : (
         <header className="sticky top-0 z-30 bg-secondary px-4 py-3">
@@ -76,22 +88,31 @@ export function AppShell() {
             <h1 className="text-xl font-semibold leading-snug tracking-tight text-primary">
               Wallstreet
             </h1>
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="inline-flex size-12 items-center justify-center rounded-full bg-secondary text-primary"
-              aria-label="Design umschalten"
-            >
-              {theme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}
-            </button>
+            <div className="flex items-center gap-1">
+              <NavLink
+                to="/agents"
+                className="inline-flex size-12 items-center justify-center rounded-full bg-card text-primary"
+                aria-label="Benachrichtigungen"
+              >
+                <Bell className="size-5" />
+              </NavLink>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="inline-flex size-12 items-center justify-center rounded-full bg-card text-primary"
+                aria-label="Design umschalten"
+              >
+                {theme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}
+              </button>
+            </div>
           </div>
         </header>
       )}
 
       <div className={chrome === "desktop" ? "flex" : ""}>
         {chrome === "desktop" ? (
-          <aside className="sticky top-14 h-[calc(100dvh-3.5rem)] w-56 shrink-0 border-r border-border p-3">
-            <nav className="flex flex-col gap-1" aria-label="Hauptnavigation">
+          <aside className="sticky top-14 h-[calc(100dvh-3.5rem)] w-64 shrink-0 border-r border-border p-4">
+            <nav className="flex flex-col gap-1.5" aria-label="Hauptnavigation">
               {NAV.map((item) => (
                 <NavLink
                   key={item.to}
@@ -104,7 +125,7 @@ export function AppShell() {
                     ].join(" ")
                   }
                 >
-                  <item.icon className="size-4" aria-hidden />
+                  <item.icon className="size-5 shrink-0" aria-hidden />
                   <span className="break-words leading-snug">{item.label}</span>
                 </NavLink>
               ))}
@@ -118,7 +139,7 @@ export function AppShell() {
       </div>
 
       <nav className={`${dockBarClass(chrome)} lg:hidden`} aria-label="Hauptnavigation">
-        <ul className="grid grid-cols-5">
+        <ul className="grid grid-cols-6">
           {NAV.map((item) => (
             <li key={item.to}>
               <NavLink
@@ -129,15 +150,15 @@ export function AppShell() {
                 {({ isActive }) => (
                   <>
                     <span
-                      className={`inline-flex size-12 items-center justify-center rounded-full ${
+                      className={`inline-flex size-11 items-center justify-center rounded-full ${
                         isActive ? "bg-secondary text-primary" : "text-muted-foreground"
                       }`}
                     >
-                      <item.icon className="size-6" aria-hidden />
+                      <item.icon className="size-5" aria-hidden />
                     </span>
                     <span
-                      className={`text-xs leading-snug ${
-                        isActive ? "text-primary font-medium" : "text-muted-foreground"
+                      className={`text-center text-xs font-medium leading-snug break-words ${
+                        isActive ? "text-primary font-semibold" : "text-muted-foreground"
                       }`}
                     >
                       {item.label}

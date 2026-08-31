@@ -10,7 +10,8 @@ import {
   YAxis,
 } from "recharts";
 import { api, type HistoryPoint } from "@/lib/api";
-import { date, money, number, signedClass } from "@/lib/format";
+import { SignedMoney } from "@/components/ui/Signed";
+import { date, money, number } from "@/lib/format";
 import { type Chrome } from "@/lib/platform";
 
 export function PositionSinceChart({
@@ -30,16 +31,22 @@ export function PositionSinceChart({
 }) {
   const [points, setPoints] = useState<HistoryPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     api
-      .history(symbol, "2y", openedAt ?? undefined)
+      .history(symbol, "1mo", openedAt ?? undefined)
       .then((res) => {
         if (!cancelled) setPoints(res.points);
       })
       .catch((e: Error) => {
         if (!cancelled) setError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -62,7 +69,7 @@ export function PositionSinceChart({
         {last ? (
           <>
             {` · jetzt ${money(last.close, currency)} · Position `}
-            <span className={signedClass(last.pnl)}>{money(last.pnl, currency)}</span>
+            <SignedMoney value={last.pnl} currency={currency} />
           </>
         ) : null}
       </p>
@@ -97,7 +104,7 @@ export function PositionSinceChart({
                 }}
                 formatter={(value, name) => {
                   const n = typeof value === "number" ? value : Number(value);
-                  if (name === "pnl") return [money(n, currency), "Ergebnis"];
+                  if (name === "pnl") return [money(n, currency, { signed: true }), "Ergebnis"];
                   return [money(n, currency), "Kurs"];
                 }}
               />
@@ -119,8 +126,12 @@ export function PositionSinceChart({
             </LineChart>
           </ResponsiveContainer>
         </div>
-      ) : !error ? (
+      ) : loading ? (
         <p className="mt-2 text-sm text-muted-foreground">Lädt Kursreihe seit Kauf…</p>
+      ) : !error ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Noch keine Handelstage seit dem Kauf. Die Kurve erscheint am nächsten Börsentag.
+        </p>
       ) : null}
     </div>
   );

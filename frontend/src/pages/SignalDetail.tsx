@@ -5,7 +5,7 @@ import { ApplyToWalletButton } from "@/components/recommendations/ApplyToWalletB
 import { ActionChip } from "@/components/ui/ActionChip";
 import { SuggestedTickers, WatchlistButton } from "@/components/ui/WatchlistButton";
 import { api, type Recommendation } from "@/lib/api";
-import { money, number, pct, recAccentClass, when } from "@/lib/format";
+import { money, number, pct, recAccentClass, signedClass, when } from "@/lib/format";
 import { panelClass, type Chrome } from "@/lib/platform";
 
 export function SignalDetailPage() {
@@ -79,12 +79,17 @@ export function SignalDetailPage() {
       <section className={`${panelClass(chrome)} px-5 py-5`}>
         <h3 className="text-lg font-semibold">Technische Indikatoren</h3>
         <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-          {Object.entries(tech).map(([k, v]) => (
-            <div key={k}>
-              <dt className="text-muted-foreground">{k}</dt>
-              <dd className="font-medium">{v == null ? "—" : number(v, 3)}</dd>
-            </div>
-          ))}
+          {Object.entries(tech).map(([k, v]) => {
+            const signed = /macd|change|return|pnl|pct|delta|momentum/i.test(k);
+            return (
+              <div key={k}>
+                <dt className="text-muted-foreground">{k}</dt>
+                <dd className={`font-medium ${signed ? signedClass(v as string | number | null) : ""}`}>
+                  {v == null ? "—" : number(v as string | number, 3)}
+                </dd>
+              </div>
+            );
+          })}
         </dl>
       </section>
 

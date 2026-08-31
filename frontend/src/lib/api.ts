@@ -1,4 +1,4 @@
-export type AssetClass = "stock" | "etf" | "crypto" | "bond";
+export type AssetClass = "stock" | "etf" | "fund" | "crypto" | "bond" | "commodity" | "forex";
 export type Action = "buy" | "hold" | "sell";
 
 export interface Asset {
@@ -157,7 +157,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () =>
-    request<{ status: string; llm_enabled?: boolean; llm_model?: string | null }>("/api/health"),
+    request<{
+      status: string;
+      llm_enabled?: boolean;
+      llm_model?: string | null;
+      llm_mini_model?: string | null;
+    }>("/api/health"),
   assets: (opts?: { assetClass?: AssetClass; watched?: boolean }) => {
     const q = new URLSearchParams();
     if (opts?.assetClass) q.set("asset_class", opts.assetClass);
@@ -165,6 +170,8 @@ export const api = {
     const suffix = q.toString() ? `?${q}` : "";
     return request<{ items: Asset[]; total: number }>(`/api/assets${suffix}`);
   },
+  asset: (symbol: string) =>
+    request<Asset>(`/api/assets/${encodeURIComponent(symbol)}`),
   addAsset: (symbol: string, watched = true) =>
     request<Asset>("/api/assets", {
       method: "POST",
@@ -177,12 +184,19 @@ export const api = {
     }),
   recommendations: (params: URLSearchParams) =>
     request<Recommendation[]>(`/api/recommendations?${params}`),
+  picks: (refresh = false) =>
+    request<Recommendation[]>(
+      `/api/recommendations/picks${refresh ? "?refresh=true" : ""}`,
+    ),
+  refreshPicks: () =>
+    request<Recommendation[]>("/api/recommendations/picks/refresh", { method: "POST" }),
   recommendation: (id: string) => request<Recommendation>(`/api/recommendations/${id}`),
   logs: (params: URLSearchParams) => request<AgentLog[]>(`/api/agents/logs?${params}`),
   runAgents: (symbols?: string) =>
-    request<Recommendation[]>(`/api/agents/run${symbols ? `?symbols=${symbols}` : ""}`, {
-      method: "POST",
-    }),
+    request<Recommendation[]>(
+      `/api/agents/run${symbols ? `?symbols=${encodeURIComponent(symbols)}` : ""}`,
+      { method: "POST" },
+    ),
   portfolio: () => request<Portfolio>("/api/portfolio"),
   transactions: () => request<Transaction[]>("/api/portfolio/transactions"),
   trade: (body: {
@@ -200,12 +214,14 @@ export const api = {
   glossary: (q?: string) =>
     request<GlossaryTerm[]>(`/api/glossary${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   term: (slug: string) => request<GlossaryTerm>(`/api/glossary/${slug}`),
-  quote: (symbol: string) => request<Quote>(`/api/market/quote/${symbol}`),
-  technicals: (symbol: string) => request<Technicals>(`/api/market/technicals/${symbol}`),
+  quote: (symbol: string) =>
+    request<Quote>(`/api/market/quote/${encodeURIComponent(symbol)}`),
+  technicals: (symbol: string) =>
+    request<Technicals>(`/api/market/technicals/${encodeURIComponent(symbol)}`),
   history: (symbol: string, period = "6mo", since?: string) => {
     const q = new URLSearchParams({ period });
     if (since) q.set("since", since);
-    return request<HistorySeries>(`/api/market/history/${symbol}?${q}`);
+    return request<HistorySeries>(`/api/market/history/${encodeURIComponent(symbol)}?${q}`);
   },
   executeRecommendation: (
     id: string,
@@ -215,8 +231,42 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body ?? {}),
     }),
+  usage: () =>
+    request<{
+      today: { prompt_tokens: number; completion_tokens: number; total_tokens: number; calls: number };
+      month: { prompt_tokens: number; completion_tokens: number; total_tokens: number; calls: number };
+      all: { prompt_tokens: number; completion_tokens: number; total_tokens: number; calls: number };
+      models_today: Array<{
+        model: string;
+        prompt_tokens: number;
+        completion_tokens: number;
+        calls: number;
+      }>;
+      models_month?: Array<{
+        model: string;
+        prompt_tokens: number;
+        completion_tokens: number;
+        calls: number;
+      }>;
+      interval_minutes: number;
+      cycles_per_day: number;
+      estimate: string;
+    }>("/api/agents/usage"),
+  pushStatus: () =>
+    request<{ public_key: string; devices: number; ready: boolean }>("/api/push/status"),
+  pushSubscribe: (body: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
+    request<{ ok: boolean }>("/api/push/subscribe", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  pushUnsubscribe: (body: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
+    request<{ ok: boolean }>("/api/push/subscribe", {
+      method: "DELETE",
+      body: JSON.stringify(body),
+    }),
+  pushTest: () => request<{ ok: boolean; sent: number }>("/api/push/test", { method: "POST" }),
   news: (symbol?: string) =>
     request<Array<{ title: string; url: string; source: string; published_at: string | null }>>(
-      `/api/market/news${symbol ? `?symbol=${symbol}` : ""}`,
+      `/api/market/news${symbol ? `?symbol=${encodeURIComponent(symbol)}` : ""}`,
     ),
 };

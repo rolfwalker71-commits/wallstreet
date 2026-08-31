@@ -5,10 +5,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.runner import run_watchlist_cycle
+from app.config import get_settings
 from app.db.session import get_db
 from app.models import AgentLog
 from app.models.enums import AgentName
 from app.schemas.recommendation import AgentLogOut, RecommendationOut
+from app.services.usage import usage_summary
 
 router = APIRouter()
 
@@ -27,6 +29,22 @@ async def list_logs(
         stmt = stmt.where(AgentLog.run_id == run_id)
     rows = (await db.execute(stmt)).scalars().all()
     return [AgentLogOut.model_validate(r) for r in rows]
+
+
+@router.get("/usage")
+async def llm_usage(db: AsyncSession = Depends(get_db)) -> dict:
+    settings = get_settings()
+    summary = await usage_summary(db)
+    cycles_per_day = 24 * 60 / max(5, settings.agent_cron_minutes)
+    summary["interval_minutes"] = settings.agent_cron_minutes
+    summary["cycles_per_day"] = round(cycles_per_day, 1)
+    summary["estimate"] = (
+        "Pro Lauf: 1× Discover (mini) plus je Titel Research (mini), "
+        "Strategist (Hauptmodell) und Educator (mini). "
+        f"Intervall {settings.agent_cron_minutes} Min → ca. {cycles_per_day:.0f} Läufe/Tag. "
+        "Push nur bei neuem Kauf/Verkauf, nicht bei jedem Halten."
+    )
+    return summary
 
 
 @router.post("/run", response_model=list[RecommendationOut])

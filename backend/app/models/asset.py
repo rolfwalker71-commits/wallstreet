@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 class Asset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Handelbares Instrument: Aktie, ETF, Crypto oder Obligation."""
+    """Handelbares Instrument: Aktie, ETF, Fonds, Crypto, Obligation, Rohstoff, Devisen."""
 
     __tablename__ = "assets"
 

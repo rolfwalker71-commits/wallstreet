@@ -6,14 +6,18 @@ import { MarketsPage } from "@/pages/Markets";
 import { SignalDetailPage } from "@/pages/SignalDetail";
 import { SignalsPage } from "@/pages/Signals";
 import { WalletPage } from "@/pages/Wallet";
+import { WatchlistDetailPage } from "@/pages/WatchlistDetail";
+import { EmpfehlungenPage } from "@/pages/Empfehlungen";
 
 export function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<SignalsPage />} />
+        <Route path="empfehlungen" element={<EmpfehlungenPage />} />
         <Route path="signals/:id" element={<SignalDetailPage />} />
         <Route path="watchlist" element={<MarketsPage />} />
+        <Route path="watchlist/:symbol" element={<WatchlistDetailPage />} />
         <Route path="markets" element={<Navigate to="/watchlist" replace />} />
         <Route path="wallet" element={<WalletPage />} />
         <Route path="lexicon" element={<LexiconPage />} />

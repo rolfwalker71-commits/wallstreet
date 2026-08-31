@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { PositionSinceChart } from "@/components/charts/PositionSinceChart";
 import { api, type Asset, type Portfolio, type Transaction } from "@/lib/api";
-import { money, number, pct, signedClass, when } from "@/lib/format";
+import { SignedMoney, SignedPct } from "@/components/ui/Signed";
+import { money, number, when } from "@/lib/format";
 import { fieldClass, listTileClass, panelClass, type Chrome } from "@/lib/platform";
 
 export function WalletPage() {
@@ -103,24 +104,24 @@ export function WalletPage() {
         </div>
         <div className={`${panelClass(chrome)} px-4 py-4`}>
           <p className="text-sm text-muted-foreground">Unrealisiert</p>
-          <p className={`text-2xl font-semibold ${signedClass(pf.unrealized_pnl)}`}>
-            {money(pf.unrealized_pnl, cur)}
+          <p className="text-2xl font-semibold">
+            <SignedMoney value={pf.unrealized_pnl} currency={cur} />
           </p>
         </div>
         <div className={`${panelClass(chrome)} px-4 py-4`}>
           <p className="text-sm text-muted-foreground">Realisiert</p>
-          <p className={`text-2xl font-semibold ${signedClass(pf.realized_pnl)}`}>
-            {money(pf.realized_pnl, cur)}
+          <p className="text-2xl font-semibold">
+            <SignedMoney value={pf.realized_pnl} currency={cur} />
           </p>
         </div>
         <div className={`${panelClass(chrome)} px-4 py-4`}>
           <p className="text-sm text-muted-foreground">Gesamtrendite</p>
-          <p className={`text-2xl font-semibold ${signedClass(pf.total_return_pct)}`}>
-            {pct(pf.total_return_pct)}
+          <p className="text-2xl font-semibold">
+            <SignedPct value={pf.total_return_pct} />
           </p>
           <p className="text-sm text-muted-foreground">
-            S&amp;P 500 {pct(pf.benchmark_return_pct)} · vs. Benchmark{" "}
-            <span className={signedClass(pf.vs_benchmark_pct)}>{pct(pf.vs_benchmark_pct)}</span>
+            S&amp;P 500 <SignedPct value={pf.benchmark_return_pct} /> · vs. Benchmark{" "}
+            <SignedPct value={pf.vs_benchmark_pct} />
           </p>
         </div>
       </section>
@@ -232,9 +233,8 @@ export function WalletPage() {
                 <p className="mt-1">
                   Jetzt {money(p.current_price, p.asset.currency)} · Wert{" "}
                   {money(p.market_value, p.asset.currency)} ·{" "}
-                  <span className={signedClass(p.unrealized_pnl)}>
-                    {money(p.unrealized_pnl, p.asset.currency)} ({pct(p.unrealized_pnl_pct)})
-                  </span>
+                  <SignedMoney value={p.unrealized_pnl} currency={p.asset.currency} />{" "}
+                  (<SignedPct value={p.unrealized_pnl_pct} />)
                 </p>
                 <PositionSinceChart
                   symbol={p.asset.symbol}
@@ -262,9 +262,10 @@ export function WalletPage() {
               <p className="text-sm text-muted-foreground">
                 {when(t.executed_at)}
                 {t.realized_pnl ? (
-                  <span className={signedClass(t.realized_pnl)}>
-                    {` · realisiert ${money(t.realized_pnl, t.currency)}`}
-                  </span>
+                  <>
+                    {" · realisiert "}
+                    <SignedMoney value={t.realized_pnl} currency={t.currency} />
+                  </>
                 ) : (
                   ""
                 )}

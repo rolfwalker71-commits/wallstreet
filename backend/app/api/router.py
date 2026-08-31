@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import agents, assets, glossary, health, market, portfolio, recommendations
+from app.api.v1 import agents, assets, glossary, health, market, portfolio, push, recommendations
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
@@ -10,3 +10,4 @@ api_router.include_router(recommendations.router, prefix="/recommendations", tag
 api_router.include_router(agents.router, prefix="/agents", tags=["agents"])
 api_router.include_router(portfolio.router, prefix="/portfolio", tags=["portfolio"])
 api_router.include_router(glossary.router, prefix="/glossary", tags=["glossary"])
+api_router.include_router(push.router, prefix="/push", tags=["push"])

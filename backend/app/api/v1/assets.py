@@ -42,6 +42,16 @@ async def create_asset(
     return AssetOut.model_validate(asset)
 
 
+@router.get("/{symbol}", response_model=AssetOut)
+async def get_asset(symbol: str, db: AsyncSession = Depends(get_db)) -> AssetOut:
+    row = (
+        await db.execute(select(Asset).where(Asset.symbol == symbol.upper()))
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(404, "Titel nicht gefunden")
+    return AssetOut.model_validate(row)
+
+
 @router.patch("/{symbol}/watch", response_model=AssetOut)
 async def patch_watch(
     symbol: str,

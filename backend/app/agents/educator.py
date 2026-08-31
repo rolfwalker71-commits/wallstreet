@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.agents.llm import get_llm
+from app.agents.llm import get_llm, invoke_llm
 from app.agents.state import AgentState
 
 EDUCATOR_SYSTEM = """Du bist der Finance Educator.
@@ -16,13 +16,15 @@ def educator_node(state: AgentState) -> AgentState:
     notes: dict[str, str] = {}
     llm = get_llm(mini=True)
     if llm and terms:
-        msg = llm.invoke(
+        msg = invoke_llm(
+            llm,
             [
                 SystemMessage(content=EDUCATOR_SYSTEM),
                 HumanMessage(
                     content=f"Begriffe: {', '.join(terms)}\nKontext: {state.get('rationale', '')[:500]}"
                 ),
-            ]
+            ],
+            purpose="educator",
         )
         import json
         import re

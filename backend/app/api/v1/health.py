@@ -16,4 +16,5 @@ async def health() -> HealthOut:
         version=__version__,
         llm_enabled=settings.llm_enabled,
         llm_model=settings.openai_model if settings.llm_enabled else None,
+        llm_mini_model=settings.openai_mini_model if settings.llm_enabled else None,
     )

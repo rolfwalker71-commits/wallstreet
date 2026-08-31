@@ -7,18 +7,20 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.llm import get_llm
+from app.agents.llm import get_llm, invoke_llm
 from app.models import Asset
 from app.services.assets import AssetError, get_or_create_asset
 from app.services.news import fetch_rss
+from app.services.swiss_tradable import is_swiss_buyable
 
-DISCOVER_SYSTEM = """Du bist Ideen-Scout für ein privates Depot.
-Lies die Headlines und nenne 4-6 handelbare Ideen AUSSERHALB der Watchlist.
+DISCOVER_SYSTEM = """Du bist Ideen-Scout für ein privates Depot in der Schweiz.
+Lies die Headlines und nenne 4-6 Ideen AUSSERHALB der Watchlist, die ein CH-Privatanleger kaufen kann.
+Erlaubt: Einzelaktien (auch US), UCITS-ETFs, SIX-Titel (.SW), Xetra/LSE-UCITS (.DE / .L), Crypto (BTC-USD, ETH-USD).
+Verboten: US-ETFs (VOO, SPY, TLT, GLD), US-Mutual-Funds (VTSAX), Devisenpaare (=X), Futures (=F).
 Nur Ticker, die in den Meldungen wirklich vorkommen oder klar gemeint sind.
-Yahoo-Finance-Symbole (Aktien/ETFs, Crypto als BTC-USD / ETH-USD / SOL-USD).
 
 JSON-Array:
-[{"symbol":"TSLA","reason":"2-3 Sätze: warum genau jetzt eine Analyse lohnt"}]
+[{"symbol":"NESN.SW","reason":"2-3 Sätze: warum genau jetzt eine Analyse lohnt"}]
 Keine Watchlist-Duplikate. Keine erfundenen Ticker."""
 
 NAME_HINTS = {
@@ -52,14 +54,16 @@ def _from_headlines(text: str, watched: set[str]) -> list[str]:
     lower = text.lower()
     for needle, ticker in NAME_HINTS.items():
         if needle in lower and ticker not in watched and ticker not in found:
-            found.append(ticker)
+            if is_swiss_buyable(ticker):
+                found.append(ticker)
     for match in re.findall(r"\b([A-Z]{2,5})\b", text):
         if match in watched or match in found:
             continue
         if match in {"CEO", "CFO", "ETF", "USD", "GDP", "FED", "AI", "IPO", "SEC"}:
             continue
         if match in NAME_HINTS.values() or match in {"TSLA", "AMZN", "GOOGL", "META", "AMD"}:
-            found.append(match)
+            if is_swiss_buyable(match):
+                found.append(match)
     return found[:6]
 
 
@@ -80,20 +84,22 @@ async def discover_ideas(
     llm = get_llm(mini=True)
     if llm:
         try:
-            msg = llm.invoke(
+            msg = invoke_llm(
+                llm,
                 [
                     SystemMessage(content=DISCOVER_SYSTEM),
                     HumanMessage(
                         content=f"Watchlist: {', '.join(sorted(watched))}\n\nHeadlines:\n{blob}"
                     ),
-                ]
+                ],
+                purpose="discover",
             )
             match = re.search(r"\[.*\]", str(msg.content), re.S)
             parsed = json.loads(match.group(0) if match else str(msg.content))
             for item in parsed:
                 sym = str(item.get("symbol") or "").upper()
                 reason = str(item.get("reason") or "").strip()
-                if sym and sym not in watched:
+                if sym and sym not in watched and is_swiss_buyable(sym):
                     reasons[sym] = reason or reasons.get(sym, "Aus News-Scan.")
         except Exception:
             pass
@@ -102,6 +108,8 @@ async def discover_ideas(
     for sym, reason in reasons.items():
         if len(ideas) >= limit:
             break
+        if not is_swiss_buyable(sym):
+            continue
         try:
             asset = await get_or_create_asset(session, sym, watched=False)
             if asset.watched:

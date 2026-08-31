@@ -29,5 +29,10 @@ export function RecommendationSparkline({ symbol }: { symbol: string }) {
 
   if (points.length < 2) return null;
   const rising = points[points.length - 1].close >= points[0].close;
-  return <Sparkline points={points} rising={rising} />;
+  return (
+    <div>
+      <Sparkline points={points} rising={rising} />
+      <p className="mt-1 text-sm text-muted-foreground">X: Datum · Y: Kurs · 3 Monate</p>
+    </div>
+  );
 }

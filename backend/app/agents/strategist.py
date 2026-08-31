@@ -5,7 +5,7 @@ import re
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.agents.llm import get_llm
+from app.agents.llm import get_llm, invoke_llm
 from app.agents.state import AgentState
 
 STRATEGIST_SYSTEM = """Du bist Senior-Strategist für ein privates Paper-Depot.
@@ -78,11 +78,13 @@ def strategist_node(state: AgentState) -> AgentState:
             "technicals": state.get("technicals"),
             "has_specific_news": bool(state.get("news_items")),
         }
-        msg = llm.invoke(
+        msg = invoke_llm(
+            llm,
             [
                 SystemMessage(content=STRATEGIST_SYSTEM),
                 HumanMessage(content=json.dumps(payload, default=str)),
-            ]
+            ],
+            purpose="strategist",
         )
         text = str(msg.content)
         match = re.search(r"\{.*\}", text, re.S)

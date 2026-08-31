@@ -20,7 +20,7 @@ function MiniChart({ hint }: { hint: string | null }) {
             width="14"
             height={h}
             rx="4"
-            className="fill-primary"
+            className={b >= 0 ? "fill-gain" : "fill-loss"}
           />
         );
       })}

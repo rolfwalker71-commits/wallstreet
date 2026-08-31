@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --gain: 16 128 56;
+  --on-gain: 255 255 255;
+  --gain-container: 210 242 218;
+  --loss: 196 32 32;
+  --on-loss: 255 255 255;
+  --loss-container: 255 220 216;
+}
+
 html {
   font-size: calc(100% * var(--app-font-scale, 1));
 }
@@ -29,6 +38,15 @@ button,
 a,
 [role="tab"] {
   touch-action: manipulation;
+}
+
+@layer utilities {
+  .text-gain {
+    color: rgb(var(--gain));
+  }
+  .text-loss {
+    color: rgb(var(--loss));
+  }
 }
 
 /* --- Material You 3 Expressive (Android) --- */

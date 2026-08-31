@@ -19,7 +19,10 @@ from app.models.enums import (
     RecommendationStatus,
 )
 from app.services.market import get_quote, persist_quote
+from app.services.push import notify_new_signals
+from app.services.usage import persist_usage, usage_scope
 from app.services.news import persist_news
+from app.services.swiss_tradable import filter_swiss_symbols, is_swiss_buyable
 
 
 def _decimal(value) -> Decimal | None:
@@ -81,7 +84,9 @@ async def run_for_asset(
         "idea_reason": idea_reason or (asset.notes if not asset.watched else None) or "",
     }
     try:
-        final = await agent_graph.ainvoke(initial)
+        with usage_scope() as bucket:
+            final = await agent_graph.ainvoke(initial)
+            await persist_usage(session, bucket, run_id)
     except Exception as exc:
         await _log(
             session,
@@ -110,19 +115,21 @@ async def run_for_asset(
         proposed_price=_decimal(final.get("proposed_price")),
         status=RecommendationStatus.OPEN,
         glossary_terms=final.get("glossary_terms"),
-        suggested_symbols=related_symbols(
-            " ".join(
-                [
-                    str(final.get("rationale") or ""),
-                    str(final.get("news_brief") or ""),
-                    " ".join(
-                        str(n.get("title") or "")
-                        for n in (final.get("news_items") or [])
-                        if isinstance(n, dict)
-                    ),
-                ]
-            ),
-            exclude={asset.symbol},
+        suggested_symbols=filter_swiss_symbols(
+            related_symbols(
+                " ".join(
+                    [
+                        str(final.get("rationale") or ""),
+                        str(final.get("news_brief") or ""),
+                        " ".join(
+                            str(n.get("title") or "")
+                            for n in (final.get("news_items") or [])
+                            if isinstance(n, dict)
+                        ),
+                    ]
+                ),
+                exclude={asset.symbol},
+            )
         )
         or None,
     )
@@ -220,13 +227,21 @@ async def run_watchlist_cycle(session: AsyncSession, symbols: list[str] | None =
         assets = (
             await session.execute(select(Asset).where(Asset.watched.is_(True)).order_by(Asset.symbol))
         ).scalars().all()
+        assets = [
+            a
+            for a in assets
+            if is_swiss_buyable(a.symbol, a.asset_class, a.exchange)
+        ]
         if not assets:
             wanted = settings.watchlist_symbols
             assets = (
                 await session.execute(select(Asset).where(Asset.symbol.in_(wanted)))
             ).scalars().all()
         seen = {a.symbol for a in assets}
-        for extra, reason in await discover_ideas(session, limit=5):
+        with usage_scope() as bucket:
+            ideas = await discover_ideas(session, limit=5)
+            await persist_usage(session, bucket)
+        for extra, reason in ideas:
             reasons[extra.symbol] = reason
             if extra.symbol not in seen:
                 assets.append(extra)
@@ -237,4 +252,9 @@ async def run_watchlist_cycle(session: AsyncSession, symbols: list[str] | None =
         rec = await run_for_asset(session, asset, idea_reason=reasons.get(asset.symbol))
         results.append(rec)
         await session.commit()
+    try:
+        await notify_new_signals(session, results)
+        await session.commit()
+    except Exception:
+        await session.rollback()
     return results

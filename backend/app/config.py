@@ -36,6 +36,7 @@ class Settings(BaseSettings):
 
     agent_cron_minutes: int = 30
     watchlist: str = "AAPL,MSFT,NVDA,VOO,BTC-USD,ETH-USD"
+    vapid_subject: str = "mailto:wallstreet@localhost"
 
     @property
     def cors_origin_list(self) -> list[str]:

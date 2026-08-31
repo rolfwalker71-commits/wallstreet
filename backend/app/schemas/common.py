@@ -20,6 +20,7 @@ class HealthOut(BaseModel):
     version: str
     llm_enabled: bool = False
     llm_model: str | None = None
+    llm_mini_model: str | None = None
 
 
 class Paginated(BaseModel, Generic[T]):

@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.db.glossary_seed import GLOSSARY_SEED
 from app.models import (
     Asset,
     AssetClass,
@@ -26,98 +27,46 @@ WATCHLIST_META: dict[str, dict] = {
         "asset_class": AssetClass.CRYPTO,
         "coingecko_id": "ethereum",
     },
+    "NESN.SW": {
+        "name": "Nestlé N",
+        "asset_class": AssetClass.STOCK,
+        "exchange": "SIX",
+    },
+    "VWCE.DE": {
+        "name": "Vanguard FTSE All-World UCITS ETF",
+        "asset_class": AssetClass.ETF,
+        "exchange": "XETRA",
+    },
+    "CSSMI.SW": {
+        "name": "iShares SMI (CH)",
+        "asset_class": AssetClass.ETF,
+        "exchange": "SIX",
+    },
+    "IDTL.L": {
+        "name": "iShares $ Treasury Bond 20+yr UCITS ETF",
+        "asset_class": AssetClass.BOND,
+        "exchange": "LSE",
+    },
+    "ZGLD.SW": {
+        "name": "Swisscanto Gold ETF",
+        "asset_class": AssetClass.COMMODITY,
+        "exchange": "SIX",
+    },
 }
 
-GLOSSARY_SEED: list[dict] = [
-    {
-        "term": "RSI",
-        "slug": "rsi",
-        "short_definition": "Relative Strength Index — Momentum-Oszillator von 0 bis 100.",
-        "long_explanation": (
-            "Der RSI misst die Stärke jüngster Kursbewegungen. Werte über 70 gelten oft "
-            "als überkauft, unter 30 als überverkauft. Er wird typischerweise über 14 Perioden berechnet."
-        ),
-        "related_terms": ["MACD", "SMA", "EMA"],
-        "chart_hint": "rsi",
-    },
-    {
-        "term": "SMA",
-        "slug": "sma",
-        "short_definition": "Simple Moving Average — einfacher gleitender Durchschnitt.",
-        "long_explanation": (
-            "Der SMA glättet Kurse über n Perioden mit gleichem Gewicht. "
-            "Kreuzungen (z. B. SMA-50 vs. SMA-200) werden als Trendwechsel gelesen."
-        ),
-        "related_terms": ["EMA", "MACD"],
-        "chart_hint": "sma",
-    },
-    {
-        "term": "EMA",
-        "slug": "ema",
-        "short_definition": "Exponential Moving Average — gleitender Durchschnitt mit mehr Gewicht auf jüngere Kurse.",
-        "long_explanation": (
-            "Im Gegensatz zum SMA reagiert der EMA schneller auf neue Preise. "
-            "Häufig genutzt in MACD und kurzfristigen Trendfiltern."
-        ),
-        "related_terms": ["SMA", "MACD"],
-        "chart_hint": "ema",
-    },
-    {
-        "term": "MACD",
-        "slug": "macd",
-        "short_definition": "Moving Average Convergence Divergence — Trend- und Momentum-Indikator.",
-        "long_explanation": (
-            "MACD ist die Differenz zweier EMAs (meist 12 und 26). Die Signallinie (EMA 9) "
-            "und das Histogramm helfen, Momentum-Wechsel zu erkennen."
-        ),
-        "related_terms": ["EMA", "RSI"],
-        "chart_hint": "macd",
-    },
-    {
-        "term": "Sharpe Ratio",
-        "slug": "sharpe-ratio",
-        "short_definition": "Rendite je Einheit Risiko, relativ zum risikofreien Zinssatz.",
-        "long_explanation": (
-            "Sharpe = (Portfoliorendite − risikofreier Zins) / Volatilität. "
-            "Höher ist besser; Werte über 1 gelten oft als akzeptabel."
-        ),
-        "related_terms": ["Stop-Loss", "Market Cap"],
-        "chart_hint": None,
-    },
-    {
-        "term": "Stop-Loss",
-        "slug": "stop-loss",
-        "short_definition": "Automatische Verkaufsorder unterhalb eines Schwellenkurses zur Verlustbegrenzung.",
-        "long_explanation": (
-            "Ein Stop-Loss begrenzt das Abwärtsrisiko. Zu enge Stops können durch normale "
-            "Volatilität ausgelöst werden; zu weite Stops erhöhen den Maximalverlust."
-        ),
-        "related_terms": ["Sharpe Ratio"],
-        "chart_hint": None,
-    },
-    {
-        "term": "Market Cap",
-        "slug": "market-cap",
-        "short_definition": "Marktkapitalisierung: Aktienkurs × ausstehende Aktien (bzw. Coin-Preis × Umlaufmenge).",
-        "long_explanation": (
-            "Die Market Cap beschreibt die Größe eines Unternehmens oder Coins. "
-            "Sie ist kein Qualitätsmaß, hilft aber bei der Einordnung (Large/Mid/Small Cap)."
-        ),
-        "related_terms": ["ETF"],
-        "chart_hint": None,
-    },
-    {
-        "term": "ETF",
-        "slug": "etf",
-        "short_definition": "Exchange Traded Fund — börsengehandelter Fonds, oft indexbasiert.",
-        "long_explanation": (
-            "ETFs bündeln viele Titel und werden wie Aktien gehandelt. "
-            "Beliebt für breite Markt-Exponierung (z. B. S&P 500) bei niedrigen Kosten."
-        ),
-        "related_terms": ["Market Cap"],
-        "chart_hint": None,
-    },
-]
+async def upsert_glossary(session: AsyncSession) -> None:
+    rows = (await session.execute(select(GlossaryTerm))).scalars().all()
+    by_slug = {row.slug: row for row in rows}
+    for item in GLOSSARY_SEED:
+        row = by_slug.get(item["slug"])
+        if row is None:
+            session.add(GlossaryTerm(**item))
+            continue
+        row.term = item["term"]
+        row.short_definition = item["short_definition"]
+        row.long_explanation = item["long_explanation"]
+        row.related_terms = item["related_terms"]
+        row.chart_hint = item.get("chart_hint")
 
 
 async def seed_if_empty(session: AsyncSession) -> None:
@@ -160,5 +109,35 @@ async def seed_if_empty(session: AsyncSession) -> None:
     if existing_glossary is None:
         for item in GLOSSARY_SEED:
             session.add(GlossaryTerm(**item))
+
+    # US-Retail-ETFs/Fonds ohne PRIIPs-KID: in der CH oft nicht kaufbar.
+    for symbol in ("TLT", "GLD", "EURUSD=X", "VTSAX", "VOO"):
+        found = (
+            await session.execute(select(Asset).where(Asset.symbol == symbol))
+        ).scalar_one_or_none()
+        if found is not None:
+            found.watched = False
+
+    for symbol in ("NESN.SW", "VWCE.DE", "CSSMI.SW", "IDTL.L", "ZGLD.SW"):
+        found = (
+            await session.execute(select(Asset).where(Asset.symbol == symbol))
+        ).scalar_one_or_none()
+        meta = WATCHLIST_META[symbol]
+        currency = "CHF" if symbol.endswith(".SW") else "EUR" if symbol.endswith(".DE") else "USD"
+        if found is None:
+            session.add(
+                Asset(
+                    symbol=symbol,
+                    name=meta["name"],
+                    asset_class=meta["asset_class"],
+                    exchange=meta.get("exchange"),
+                    currency=currency,
+                    watched=True,
+                )
+            )
+        else:
+            found.watched = True
+            found.asset_class = meta["asset_class"]
+            found.name = meta["name"]
 
     await session.commit()

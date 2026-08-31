@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import { WatchlistButton } from "@/components/ui/WatchlistButton";
 import { api, type Asset, type Quote } from "@/lib/api";
-import { CLASS_LABEL, money, pct, signedClass } from "@/lib/format";
+import { SignedPct } from "@/components/ui/Signed";
+import { CLASS_LABEL, money, signedClass } from "@/lib/format";
 import { fieldClass, listTileClass, type Chrome } from "@/lib/platform";
 
 function QuoteChange({ value }: { value: number | null | undefined }) {
@@ -16,13 +17,14 @@ function QuoteChange({ value }: { value: number | null | undefined }) {
           ? "bg-loss-container text-loss"
           : "bg-muted text-muted-foreground"
     }`}>
-      {pct(n)}
+      <SignedPct value={n} />
     </span>
   );
 }
 
 export function MarketsPage() {
   const { chrome } = useOutletContext<{ chrome: Chrome }>();
+  const navigate = useNavigate();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [error, setError] = useState<string | null>(null);
@@ -84,13 +86,18 @@ export function MarketsPage() {
   });
   const watchedCount = assets.filter((a) => a.watched).length;
 
+  const openDetail = (sym: string) => {
+    navigate(`/watchlist/${encodeURIComponent(sym)}`);
+  };
+
   return (
     <div className="space-y-4">
       <div>
         <div className="mb-1.5 h-1.5 w-14 rounded-full bg-gain" />
-        <h2 className="text-2xl font-semibold leading-snug tracking-tight">Märkte</h2>
+        <h2 className="text-2xl font-semibold leading-snug tracking-tight">Watchlist</h2>
         <p className="text-sm text-muted-foreground">
-          {watchedCount} Titel auf der Watchlist. Entdeckte Empfehlungen kannst du hier übernehmen.
+          Tippe einen Titel für Bewertung, News und Chart. {watchedCount} auf der Watchlist —
+          entdeckte Empfehlungen kannst du hier übernehmen.
         </p>
       </div>
 
@@ -178,17 +185,33 @@ export function MarketsPage() {
             </thead>
             <tbody>
               {visible.map((a) => (
-                <tr key={a.id} className="border-t border-border">
-                  <td className="px-3 py-2 font-medium">{a.symbol}</td>
+                <tr
+                  key={a.id}
+                  className="cursor-pointer border-t border-border hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                  tabIndex={0}
+                  aria-label={`${a.symbol} ${a.name} öffnen`}
+                  onClick={() => openDetail(a.symbol)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openDetail(a.symbol);
+                    }
+                  }}
+                >
+                  <td className="px-3 py-2 font-medium text-primary">{a.symbol}</td>
                   <td className="px-3 py-2">{a.name}</td>
-                  <td className="px-3 py-2">{CLASS_LABEL[a.asset_class]}</td>
+                  <td className="px-3 py-2">{CLASS_LABEL[a.asset_class] ?? a.asset_class}</td>
                   <td className={`px-3 py-2 ${signedClass(quotes[a.symbol]?.change_pct)}`}>
                     {money(quotes[a.symbol]?.price ?? a.last_price, a.currency)}
                   </td>
                   <td className="px-3 py-2">
                     <QuoteChange value={quotes[a.symbol]?.change_pct} />
                   </td>
-                  <td className="px-3 py-2">
+                  <td
+                    className="px-3 py-2"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
                     <WatchlistButton
                       asset={a}
                       chrome={chrome}
@@ -214,14 +237,23 @@ export function MarketsPage() {
                     ? "border-l-4 border-loss"
                     : change != null && change > 0
                       ? "border-l-4 border-gain"
-                      : "border-l-4 border-primary"
-                } px-4 py-4`}
+                    : "border-l-4 border-primary"
+                } cursor-pointer px-4 py-4`}
+                tabIndex={0}
+                aria-label={`${a.symbol} ${a.name} öffnen`}
+                onClick={() => openDetail(a.symbol)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openDetail(a.symbol);
+                  }
+                }}
               >
-                <p className="text-lg font-semibold leading-snug break-words">
+                <p className="text-lg font-semibold leading-snug break-words text-primary">
                   {a.symbol} · {a.name}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {CLASS_LABEL[a.asset_class]}
+                  {CLASS_LABEL[a.asset_class] ?? a.asset_class}
                   {a.watched ? "" : " · Entdeckt"}
                 </p>
                 <p className={`mt-2 text-xl font-medium ${signedClass(change)}`}>
@@ -230,7 +262,11 @@ export function MarketsPage() {
                 <div className="mt-1">
                   <QuoteChange value={change} />
                 </div>
-                <div className="mt-3">
+                <div
+                  className="mt-3"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
                   <WatchlistButton
                     asset={a}
                     chrome={chrome}

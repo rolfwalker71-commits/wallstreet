@@ -42,8 +42,15 @@ async def lifespan(_app: FastAPI):
                 "ADD COLUMN IF NOT EXISTS suggested_symbols JSONB"
             )
         )
+        for value in ("FUND", "COMMODITY", "FOREX"):
+            await conn.execute(
+                text(f"ALTER TYPE asset_class ADD VALUE IF NOT EXISTS '{value}'")
+            )
     async with async_session_factory() as session:
         await seed_if_empty(session)
+        from app.services.vapid import ensure_vapid
+
+        await ensure_vapid(session, subject=settings.vapid_subject)
     start_scheduler()
     logger.info(
         "Wallstreet API bereit (v%s, LLM %s)",

@@ -5,7 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Asset, AssetClass
-from app.services.market import COINGECKO_IDS, _infer_class, get_quote, persist_quote
+from app.services.classify import COINGECKO_IDS, infer_asset_class
+from app.services.market import get_quote, persist_quote
 
 
 class AssetError(ValueError):
@@ -36,15 +37,8 @@ def lookup_meta(symbol: str) -> dict:
     except Exception:
         info = {}
     name = info.get("shortName") or info.get("longName") or sym
-    qtype = str(info.get("quoteType") or "").upper()
-    if qtype == "ETF":
-        cls = AssetClass.ETF
-    elif qtype in {"CRYPTOCURRENCY", "CRYPTO"}:
-        cls = AssetClass.CRYPTO
-    elif qtype == "BOND":
-        cls = AssetClass.BOND
-    else:
-        cls = _infer_class(sym)
+    qtype = str(info.get("quoteType") or "")
+    cls = infer_asset_class(sym, qtype)
     return {
         "symbol": sym,
         "name": name,

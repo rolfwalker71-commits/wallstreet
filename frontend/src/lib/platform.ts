@@ -41,6 +41,13 @@ export function fabClass(chrome: Chrome) {
   return "size-16 rounded-[1.75rem] bg-primary text-on-primary";
 }
 
+export function primaryActionClass(chrome: Chrome) {
+  if (chrome === "desktop") {
+    return "inline-flex h-11 min-h-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 text-sm font-medium text-on-primary";
+  }
+  return "inline-flex min-h-12 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-primary px-5 text-sm font-medium text-on-primary";
+}
+
 export function fabClearance(chrome: Chrome, docks = 1) {
   if (chrome === "desktop") return "mb-4";
   return docks > 0 ? "mb-24" : "mb-6";
@@ -63,9 +70,9 @@ export function fieldClass(chrome: Chrome) {
 export function navItemClass(chrome: Chrome, active: boolean) {
   if (chrome === "desktop") {
     return [
-      "flex min-h-12 items-center gap-2 rounded-md px-3 text-sm",
+      "flex min-h-12 items-center gap-3 rounded-md px-3 text-base font-semibold",
       active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted",
     ].join(" ");
   }
-  return "flex min-h-16 flex-col items-center justify-center gap-1 px-3";
+  return "flex min-h-16 flex-col items-center justify-center gap-1 px-2";
 }

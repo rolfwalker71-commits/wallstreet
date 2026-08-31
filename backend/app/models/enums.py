@@ -6,6 +6,9 @@ class AssetClass(str, enum.Enum):
     ETF = "etf"
     CRYPTO = "crypto"
     BOND = "bond"
+    FUND = "fund"
+    COMMODITY = "commodity"
+    FOREX = "forex"
 
 
 class RecommendationAction(str, enum.Enum):

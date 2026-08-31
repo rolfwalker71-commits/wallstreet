@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.agents.llm import get_llm
+from app.agents.llm import get_llm, invoke_llm
 from app.agents.state import AgentState
 from app.services.news import fetch_rss, filter_for_symbol
 
@@ -58,11 +58,13 @@ def research_node(state: AgentState) -> AgentState:
             + "\n\nMarktumfeld:\n"
             + ("\n".join(market) or "(keine Feeds)")
         )
-        msg = llm.invoke(
+        msg = invoke_llm(
+            llm,
             [
                 SystemMessage(content=RESEARCH_SYSTEM),
                 HumanMessage(content=payload),
-            ]
+            ],
+            purpose="research",
         )
         text = str(msg.content)
         brief = text

@@ -44,7 +44,11 @@ export function number(value: string | number | null | undefined, digits = 2) {
   }).format(n);
 }
 
-export function money(value: string | number | null | undefined, currency = "USD") {
+export function money(
+  value: string | number | null | undefined,
+  currency = "USD",
+  opts?: { signed?: boolean },
+) {
   if (value === null || value === undefined || value === "") return "—";
   const n = typeof value === "number" ? value : Number(value);
   if (Number.isNaN(n)) return "—";
@@ -52,6 +56,7 @@ export function money(value: string | number | null | undefined, currency = "USD
   return new Intl.NumberFormat(LOCALE, {
     style: "currency",
     currency,
+    signDisplay: opts?.signed ? "exceptZero" : "auto",
     minimumFractionDigits: 2,
     maximumFractionDigits: max,
   }).format(n);
@@ -90,6 +95,9 @@ export const ACTION_LABEL: Record<string, string> = {
 export const CLASS_LABEL: Record<string, string> = {
   stock: "Aktien",
   etf: "ETFs",
+  fund: "Fonds",
   crypto: "Crypto",
   bond: "Obligationen",
+  commodity: "Rohstoffe",
+  forex: "Devisen",
 };

@@ -10,9 +10,34 @@ from app.models import Asset, Recommendation
 from app.models.enums import AssetClass, RecommendationAction, RecommendationStatus
 from app.schemas.portfolio import ApplyRecommendationIn, TransactionOut
 from app.schemas.recommendation import RecommendationOut
+from app.services.picks import list_buy_picks
 from app.services.portfolio import TradeError, execute_recommendation
+from app.services.swiss_tradable import is_swiss_buyable
 
 router = APIRouter()
+
+
+@router.get("/picks", response_model=list[RecommendationOut])
+async def list_buy_now_picks(
+    refresh: bool = False,
+    db: AsyncSession = Depends(get_db),
+) -> list[RecommendationOut]:
+    rows = await list_buy_picks(db, refresh=refresh)
+    await db.commit()
+    for row in rows:
+        await db.refresh(row, attribute_names=["asset", "agent_logs"])
+    return [RecommendationOut.model_validate(r) for r in rows]
+
+
+@router.post("/picks/refresh", response_model=list[RecommendationOut])
+async def refresh_buy_now_picks(
+    db: AsyncSession = Depends(get_db),
+) -> list[RecommendationOut]:
+    rows = await list_buy_picks(db, refresh=True)
+    await db.commit()
+    for row in rows:
+        await db.refresh(row, attribute_names=["asset", "agent_logs"])
+    return [RecommendationOut.model_validate(r) for r in rows]
 
 
 @router.get("", response_model=list[RecommendationOut])
@@ -21,6 +46,7 @@ async def list_recommendations(
     action: RecommendationAction | None = None,
     status: RecommendationStatus | None = None,
     watched: bool | None = None,
+    symbol: str | None = None,
     latest: bool = True,
     limit: int = Query(default=80, le=200),
     db: AsyncSession = Depends(get_db),
@@ -43,7 +69,14 @@ async def list_recommendations(
         stmt = stmt.where(Asset.watched.is_(watched))
     if asset_class:
         stmt = stmt.where(Asset.asset_class == asset_class)
+    if symbol:
+        stmt = stmt.where(Asset.symbol == symbol.upper())
     rows = (await db.execute(stmt)).scalars().all()
+    rows = [
+        row
+        for row in rows
+        if is_swiss_buyable(row.asset.symbol, row.asset.asset_class, row.asset.exchange)
+    ]
     if latest:
         seen: set = set()
         uniq: list[Recommendation] = []

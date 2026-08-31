@@ -11,23 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Asset, AssetClass
 from app.schemas.market import HistoryOut, HistoryPoint, QuoteOut, TechnicalsOut
+from app.services.classify import COINGECKO_IDS, infer_asset_class
 from app.services.indicators import compute_technicals
-
-COINGECKO_IDS = {
-    "BTC-USD": "bitcoin",
-    "ETH-USD": "ethereum",
-    "SOL-USD": "solana",
-}
 
 CRYPTO_VS = "usd"
 
 
 def _infer_class(symbol: str) -> AssetClass:
-    if symbol.endswith("-USD") or symbol.upper() in COINGECKO_IDS:
-        return AssetClass.CRYPTO
-    if symbol.upper() in {"VOO", "SPY", "QQQ", "IWDA", "VWCE"}:
-        return AssetClass.ETF
-    return AssetClass.STOCK
+    return infer_asset_class(symbol)
 
 
 async def fetch_coingecko_quote(coingecko_id: str, symbol: str) -> QuoteOut | None:
@@ -117,41 +108,60 @@ def fetch_history(symbol: str, period: str = "6mo") -> pd.DataFrame:
 ALLOWED_PERIODS = {"1mo", "3mo", "6mo", "1y", "2y", "5y"}
 
 
+def _period_for_since(since: datetime | None, period: str) -> str:
+    if since is None:
+        return period if period in ALLOWED_PERIODS else "6mo"
+    aware = since if since.tzinfo else since.replace(tzinfo=UTC)
+    age_days = (datetime.now(UTC) - aware).days
+    if age_days <= 30:
+        return "1mo"
+    if age_days <= 180:
+        return "6mo"
+    return "2y"
+
+
 def get_history_series(
     symbol: str,
     period: str = "6mo",
     since: datetime | None = None,
 ) -> HistoryOut:
-    chosen = period if period in ALLOWED_PERIODS else "6mo"
-    if since is not None:
-        chosen = "2y"
+    chosen = _period_for_since(since, period)
     hist = fetch_history(symbol, period=chosen)
     if hist.empty:
         return HistoryOut(symbol=symbol.upper(), period=chosen, points=[])
     closes = hist["Close"].dropna()
     sma20 = closes.rolling(20, min_periods=20).mean()
     sma50 = closes.rolling(50, min_periods=50).mean()
-    points: list[HistoryPoint] = []
+    before: list[HistoryPoint] = []
+    after: list[HistoryPoint] = []
+    since_cmp = None
+    if since is not None:
+        since_cmp = since if since.tzinfo else since.replace(tzinfo=UTC)
     for idx, close in closes.items():
         ts = idx.to_pydatetime() if hasattr(idx, "to_pydatetime") else idx
-        if since is not None:
-            cmp = ts
-            if getattr(cmp, "tzinfo", None) is None:
-                cmp = cmp.replace(tzinfo=UTC)
-            since_cmp = since if since.tzinfo else since.replace(tzinfo=UTC)
-            if cmp < since_cmp:
-                continue
         stamp = idx.isoformat() if hasattr(idx, "isoformat") else str(idx)
         s20 = sma20.loc[idx]
         s50 = sma50.loc[idx]
-        points.append(
-            HistoryPoint(
-                date=stamp,
-                close=float(close),
-                sma_20=None if pd.isna(s20) else float(s20),
-                sma_50=None if pd.isna(s50) else float(s50),
-            )
+        point = HistoryPoint(
+            date=stamp,
+            close=float(close),
+            sma_20=None if pd.isna(s20) else float(s20),
+            sma_50=None if pd.isna(s50) else float(s50),
         )
+        if since_cmp is None:
+            after.append(point)
+            continue
+        cmp = ts
+        if getattr(cmp, "tzinfo", None) is None:
+            cmp = cmp.replace(tzinfo=UTC)
+        if cmp < since_cmp:
+            before.append(point)
+        else:
+            after.append(point)
+    # Kauf am Wochenende / selben Tag: noch keine Kerze danach — letzte Kurse zeigen.
+    points = after
+    if since_cmp is not None and len(points) < 2:
+        points = before[-10:] + after
     return HistoryOut(symbol=symbol.upper(), period=chosen, points=points)
 
 
