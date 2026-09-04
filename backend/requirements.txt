@@ -19,6 +19,8 @@ redis==5.2.1
 celery==5.4.0
 pywebpush==2.0.3
 cryptography==44.0.0
+pyotp==2.9.0
+qrcode==8.0
 
 # Tests
 pytest==8.3.4

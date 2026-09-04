@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { AuthGate } from "@/components/auth/AuthGate";
 import { AppShell } from "@/components/layout/AppShell";
 import { AgentsPage } from "@/pages/Agents";
 import { LexiconPage } from "@/pages/Lexicon";
@@ -11,6 +12,7 @@ import { EmpfehlungenPage } from "@/pages/Empfehlungen";
 
 export function App() {
   return (
+    <AuthGate>
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<SignalsPage />} />
@@ -26,5 +28,6 @@ export function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
+    </AuthGate>
   );
 }

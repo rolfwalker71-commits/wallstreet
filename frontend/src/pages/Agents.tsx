@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { FamilyTotp } from "@/components/auth/FamilyTotp";
 import { NotifyToggle } from "@/components/push/NotifyToggle";
 import { api, type AgentLog } from "@/lib/api";
 import { number, when } from "@/lib/format";
@@ -120,6 +121,8 @@ export function AgentsPage() {
         {models.main ? ` · Strategist ${models.main}` : ""}
         {models.mini ? ` · Mini ${models.mini}` : ""}.
       </p>
+
+      <FamilyTotp chrome={chrome} />
 
       <NotifyToggle chrome={chrome} />
 

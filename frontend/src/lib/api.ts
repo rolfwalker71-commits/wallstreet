@@ -249,6 +249,7 @@ function errorFromBody(text: string, status: number, statusText: string) {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
     ...init,
   });
@@ -267,7 +268,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
+export interface AuthStatus {
+  configured: boolean;
+  authenticated: boolean;
+}
+
+export interface AuthSetup {
+  otpauth: string;
+  qr_svg: string;
+  secret: string;
+  issuer: string;
+  account: string;
+}
+
 export const api = {
+  authStatus: () => request<AuthStatus>("/api/auth/status"),
+  authSetup: () => request<AuthSetup>("/api/auth/setup"),
+  verifyTotp: (code: string) =>
+    request<{ ok: boolean }>("/api/auth/verify", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+  authLogout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
   health: () =>
     request<{
       status: string;

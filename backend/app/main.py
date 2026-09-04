@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
+from app.api.middleware import TotpGateMiddleware
 from app.api.router import api_router
 from app.config import get_settings
 from app.db.base import Base
@@ -106,6 +107,7 @@ def create_app() -> FastAPI:
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",
     )
+    app.add_middleware(TotpGateMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
